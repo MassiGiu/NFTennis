@@ -68,3 +68,10 @@ Follow these steps to set up the project locally.
 3. **Start the React application**:
    ```bash
    npm start
+
+### Usage  
+
+1. Open [http://localhost:3000](http://localhost:3000) in your browser.  
+2. Connect MetaMask to the Ganache blockchain.  
+3. Explore the marketplace to buy or sell NFTs.  
+
