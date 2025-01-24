@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import axios from "axios";
 import Web3 from "web3";
-import NFTennisContract from "./NFTennis.json";
 
 const Home = () => {
   const [web3, setWeb3] = useState(null);
   const [account, setAccount] = useState("");
-  const [tokenURI, setTokenURI] = useState("");
-  const [rarity, setRarity] = useState("0"); // Default: Common
-  const [isOwner, setIsOwner] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [rarity, setRarity] = useState("Common");
+  const [image, setImage] = useState(null); // Stato per il file immagine
+  const [loading, setLoading] = useState(false);
+  const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
     const initWeb3 = async () => {
@@ -20,24 +20,6 @@ const Home = () => {
         const accounts = await web3Instance.eth.getAccounts();
         setWeb3(web3Instance);
         setAccount(accounts[0]);
-
-        const contractAddress = process.env.REACT_APP_CONTRACT_ADDRESS; // Sostituisci con l'indirizzo corretto
-        const contractABI = NFTennisContract.abi;
-        const contract = new web3Instance.eth.Contract(contractABI, contractAddress);
-
-        try {
-          const contractOwner = await contract.methods.owner().call();
-          if (accounts[0].toLowerCase() === contractOwner.toLowerCase()) {
-            setIsOwner(true);
-          }
-        } catch (error) {
-          console.error("Errore nel recuperare il proprietario del contratto:", error);
-        }
-
-        window.ethereum.on("accountsChanged", (accounts) => {
-          setAccount(accounts[0]);
-          setIsOwner(false);
-        });
       } else {
         alert("Please install MetaMask!");
       }
@@ -46,67 +28,93 @@ const Home = () => {
     initWeb3();
   }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!isOwner) {
-      setErrorMessage("Solo il proprietario del contratto può creare nuovi NFT!");
+  // Funzione per gestire il caricamento dell'immagine
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImage(file);
+    }
+  };
+
+  // Funzione per inviare la richiesta di minting dell'NFT
+  const mintNFT = async () => {
+    if (!name || !description || !rarity || !image) {
+      setFeedback("Please fill in all the fields and upload an image.");
       return;
     }
 
+    const rarityMapping = {
+      Common: 0,
+      Rare: 1,
+      Legendary: 2,
+    };
+
+    const formData = new FormData();
+    formData.append("recipient", account);
+    formData.append("name", name);
+    formData.append("description", description);
+    formData.append("rarity", rarityMapping[rarity]);
+    formData.append("image", image); // Aggiungi l'immagine
+
     try {
-      const response = await fetch("http://localhost:5001/api/nfts/mint", {
-        method: "POST",
+      setLoading(true);
+      setFeedback("");
+
+      const response = await axios.post("http://localhost:5001/api/mint", formData, {
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "multipart/form-data",
         },
-        body: JSON.stringify({ recipient: account, tokenURI, rarity }),
       });
 
-      if (response.ok) {
-        setSuccessMessage("NFT creato con successo!");
-        setTokenURI("");
-        setRarity("0");
-        setErrorMessage("");
-      } else {
-        const errorData = await response.json();
-        setErrorMessage(errorData.error || "Errore nella creazione dell'NFT");
-      }
+      setFeedback("NFT minted successfully!");
+      console.log("Server Response:", response.data);
     } catch (error) {
-      setErrorMessage("Errore nella creazione dell'NFT. Controlla la console.");
-      console.error("Errore nella creazione dell'NFT:", error);
+      console.error("Error response:", error.response?.data || error.message);
+      setFeedback(`Error minting NFT: ${error.response?.data?.error || error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div>
-      <h1>Benvenuti in NFTennis!</h1>
-      <p>Esplora il marketplace per visualizzare e acquistare gli NFT disponibili.</p>
-
-      <form onSubmit={handleSubmit}>
+      <h1>Mint Your NFTennis NFT</h1>
+      <div>
+        <label>Name: </label>
         <input
           type="text"
-          placeholder="Token URI"
-          value={tokenURI}
-          onChange={(e) => setTokenURI(e.target.value)}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Enter player name"
           required
         />
+      </div>
+      <div>
+        <label>Description: </label>
+        <input
+          type="text"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Enter description"
+          required
+        />
+      </div>
+      <div>
+        <label>Rarity: </label>
         <select value={rarity} onChange={(e) => setRarity(e.target.value)} required>
-          <option value="0">Common</option>
-          <option value="1">Rare</option>
-          <option value="2">Legendary</option>
+          <option value="Common">Common</option>
+          <option value="Rare">Rare</option>
+          <option value="Legendary">Legendary</option>
         </select>
-        <button type="submit">Crea NFT</button>
-      </form>
-
-      {errorMessage && <p style={{ color: "red" }}>{errorMessage}</p>}
-      {successMessage && <p style={{ color: "green" }}>{successMessage}</p>}
-
-      <Link to="/marketplace" style={{ marginTop: "20px", display: "inline-block" }}>
-        <button>Vai al Marketplace</button>
-      </Link>
-
-      {account && <p>Connected Account: {account}</p>}
-      {!isOwner && account && <p>Solo il proprietario può creare nuovi NFT</p>}
+      </div>
+      <div>
+        <label>Upload Image: </label>
+        <input type="file" accept="image/*" onChange={handleImageChange} required />
+      </div>
+      <button onClick={mintNFT} disabled={loading}>
+        {loading ? "Minting..." : "Mint NFT"}
+      </button>
+      {feedback && <p>{feedback}</p>}
     </div>
   );
 };

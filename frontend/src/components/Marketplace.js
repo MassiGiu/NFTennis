@@ -38,20 +38,12 @@ const Marketplace = () => {
   useEffect(() => {
     if (contract) {
       fetch("http://localhost:5001/api/nfts")
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error('Network response was not ok ' + response.statusText);
-          }
-          return response.json();
-        })
+        .then((response) => response.json())
         .then((data) => {
           const fetchMetadata = async () => {
             const nftDetails = await Promise.all(data.tokens.map(async (nft) => {
               try {
                 const metadataResponse = await fetch(nft.tokenURI);
-                if (!metadataResponse.ok) {
-                  throw new Error('Metadata response was not ok ' + metadataResponse.statusText);
-                }
                 const metadata = await metadataResponse.json();
                 return {
                   ...nft,
@@ -74,9 +66,10 @@ const Marketplace = () => {
   }, [contract]);
 
   // Funzione per avviare un'asta
-  const startAuction = async (tokenId) => {
+  const startAuction = async (tokenId, duration) => {
     try {
-      await contract.methods.startAuction(tokenId).send({ from: account });
+      // La durata dell'asta va passata come secondo parametro (in secondi)
+      await contract.methods.startAuction(tokenId, duration).send({ from: account });
       alert('Auction started successfully!');
     } catch (error) {
       console.error("Error starting auction:", error);
@@ -134,26 +127,25 @@ const Marketplace = () => {
             )}
             <p>{nft.metadata.name}</p>
             <p>{nft.metadata.description}</p>
+
             <button onClick={() => setSelectedTokenId(nft.tokenId)}>Select for Auction</button>
-            <button onClick={() => startAuction(nft.tokenId)}>Start Auction</button>
+            <button onClick={() => startAuction(nft.tokenId, 3600)}>Start Auction (1 hour)</button>
             <button onClick={() => endAuction(nft.tokenId)}>End Auction</button>
+
+            {selectedTokenId === nft.tokenId && (
+              <div>
+                <h3>Place a Bid</h3>
+                <input 
+                  type="text" 
+                  placeholder="Bid Amount in ETH" 
+                  value={bidAmount}
+                  onChange={(e) => setBidAmount(e.target.value)} 
+                />
+                <button onClick={placeBid}>Place Bid</button>
+              </div>
+            )}
           </div>
         ))}
-      </div>
-
-      <div>
-        {selectedTokenId && (
-          <div>
-            <h3>Place a Bid</h3>
-            <input
-              type="text"
-              placeholder="Bid Amount in ETH"
-              value={bidAmount}
-              onChange={(e) => setBidAmount(e.target.value)}
-            />
-            <button onClick={placeBid}>Place Bid</button>
-          </div>
-        )}
       </div>
     </div>
   );
