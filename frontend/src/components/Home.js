@@ -8,7 +8,7 @@ const Home = () => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [rarity, setRarity] = useState("Common");
-  const [image, setImage] = useState(null); // Stato per il file immagine
+  const [file, setFile] = useState(null); // Stato per il file (immagine o video)
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState("");
 
@@ -28,18 +28,18 @@ const Home = () => {
     initWeb3();
   }, []);
 
-  // Funzione per gestire il caricamento dell'immagine
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setImage(file);
+  // Funzione per gestire il caricamento del file (immagine o video)
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
     }
   };
 
   // Funzione per inviare la richiesta di minting dell'NFT
   const mintNFT = async () => {
-    if (!name || !description || !rarity || !image) {
-      setFeedback("Please fill in all the fields and upload an image.");
+    if (!name || !description || !rarity || !file) {
+      setFeedback("Please fill in all the fields and upload a file (image or video).");
       return;
     }
 
@@ -54,7 +54,7 @@ const Home = () => {
     formData.append("name", name);
     formData.append("description", description);
     formData.append("rarity", rarityMapping[rarity]);
-    formData.append("image", image); // Aggiungi l'immagine
+    formData.append("file", file); // Aggiungi il file (immagine o video)
 
     try {
       setLoading(true);
@@ -108,8 +108,13 @@ const Home = () => {
         </select>
       </div>
       <div>
-        <label>Upload Image: </label>
-        <input type="file" accept="image/*" onChange={handleImageChange} required />
+        <label>Upload Image or Video: </label>
+        <input
+          type="file"
+          accept="image/*,video/*"  // Permette sia immagini che video
+          onChange={handleFileChange}
+          required
+        />
       </div>
       <button onClick={mintNFT} disabled={loading}>
         {loading ? "Minting..." : "Mint NFT"}

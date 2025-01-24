@@ -5,11 +5,24 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 const axios = require('axios');
-const FormData = require('form-data'); // Per caricare file (immagini)
+const FormData = require('form-data'); // Per caricare file (immagini e video)
 const multer = require('multer');
 
 // Configura Multer per salvare i file in memoria
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB max
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max per file
+  fileFilter: (req, file, cb) => {
+    // Controllo se il file è un'immagine o un video
+    const allowedImageTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    const allowedVideoTypes = ['video/mp4', 'video/webm'];
+    if (allowedImageTypes.includes(file.mimetype) || allowedVideoTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only images and videos are allowed.'));
+    }
+  }
+}); // 50MB max
 
 // Inizializza l'applicazione Express
 const app = express();
@@ -54,7 +67,7 @@ const nftRoutes = require('./app/routes/nft_routes')(nftennisContract, web3, own
 app.use('/api/nfts', nftRoutes);
 
 // API per la creazione dell'NFT
-app.post('/api/mint', upload.single('image'), async (req, res) => {
+app.post('/api/mint', upload.single('file'), async (req, res) => {
   const { recipient, name, description, rarity } = req.body;
 
   // Validazione dei dati
@@ -75,16 +88,20 @@ app.post('/api/mint', upload.single('image'), async (req, res) => {
   }
 
   try {
-    // Validazione immagine
+    // Validazione file
     if (!req.file) {
-      return res.status(400).json({ error: "Image file is required." });
+      return res.status(400).json({ error: "File is required." });
     }
 
-    // Carica l'immagine su Pinata
+    // Determinare il tipo di file (immagine o video)
+    const fileType = req.file.mimetype;
+    let fileURI;
+
+    // Carica il file su Pinata
     const form = new FormData();
     form.append('file', req.file.buffer, { filename: req.file.originalname });
 
-    const imageResponse = await axios.post(
+    const fileResponse = await axios.post(
       "https://api.pinata.cloud/pinning/pinFileToIPFS",
       form,
       {
@@ -96,16 +113,25 @@ app.post('/api/mint', upload.single('image'), async (req, res) => {
       }
     );
 
-    const imageURI = `https://gateway.pinata.cloud/ipfs/${imageResponse.data.IpfsHash}`;
-    console.log("Image uploaded to Pinata:", imageURI);
+    // Genera l'URI del file su Pinata
+    fileURI = `https://gateway.pinata.cloud/ipfs/${fileResponse.data.IpfsHash}`;
+    console.log("File uploaded to Pinata:", fileURI);
 
     // Creazione dei metadati
     const metadata = {
       name,
       description,
-      image: imageURI,
       attributes: [{ trait_type: "Rarity", value: rarityNumber }],
     };
+
+    // Aggiungi il campo file basato sul tipo di file
+    if (fileType.includes("image")) {
+      metadata.image = fileURI; // Immagine
+    } else if (fileType.includes("video")) {
+      metadata.video = fileURI; // Video
+    } else {
+      return res.status(400).json({ error: "Unsupported file type. Only images and videos are allowed." });
+    }
 
     // Carica i metadati su Pinata
     const metadataResponse = await axios.post(
@@ -135,7 +161,7 @@ app.post('/api/mint', upload.single('image'), async (req, res) => {
 
     res.status(200).send({ message: "NFT minted successfully", mintResponse: mintResponse.data });
   } catch (error) {
-    console.error("Error in /api/mintnknknk:", error.response?.data || error.message);
+    console.error("Error in /api/mint:", error.response?.data || error.message);
     res.status(500).json({ error: error.response?.data?.error || error.message });
   }
 });

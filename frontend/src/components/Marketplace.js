@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Web3 from "web3";
-import NFTennisContract from './NFTennis.json'
+import NFTennisContract from './NFTennis.json';
 
 const ABI = NFTennisContract.abi;
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS; // Specifica l'indirizzo del contratto
@@ -53,7 +53,7 @@ const Marketplace = () => {
                 console.error(`Error fetching metadata for token ${nft.tokenId}:`, error);
                 return {
                   ...nft,
-                  metadata: { image: '', name: 'Unknown', description: 'Unknown' }
+                  metadata: { file: '', name: 'Unknown', description: 'Unknown' }
                 };
               }
             }));
@@ -68,7 +68,6 @@ const Marketplace = () => {
   // Funzione per avviare un'asta
   const startAuction = async (tokenId, duration) => {
     try {
-      // La durata dell'asta va passata come secondo parametro (in secondi)
       await contract.methods.startAuction(tokenId, duration).send({ from: account });
       alert('Auction started successfully!');
     } catch (error) {
@@ -107,6 +106,26 @@ const Marketplace = () => {
     }
   };
 
+  // Funzione per determinare il tipo di file
+  const renderMedia = (url, metadata) => {
+    // Se è un'immagine
+    if (metadata.image) {
+      return <img src={metadata.image} alt={metadata.name} style={{ width: '200px', height: '200px' }} />;
+    }
+
+    // Se è un video
+    if (metadata.video) {
+      return (
+        <video width="200" height="200" controls>
+          <source src={metadata.video} type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div>
       <h1>Marketplace</h1>
@@ -121,10 +140,12 @@ const Marketplace = () => {
           <div key={nft.tokenId}>
             <p>Token ID: {nft.tokenId}</p>
             <p>Owner: {nft.owner}</p>
-            <p>Metadata: <a href={nft.tokenURI}>{nft.tokenURI}</a></p>
-            {nft.metadata.image && (
-              <img src={nft.metadata.image} alt={nft.metadata.name} style={{ width: '200px', height: '200px' }} />
-            )}
+            <p>Metadata: <a href={nft.tokenURI} target="_blank" rel="noopener noreferrer">{nft.tokenURI}</a></p>
+
+            {/* Display media based on type */}
+            {nft.metadata && renderMedia(nft.metadata.file, nft.metadata)}
+            
+
             <p>{nft.metadata.name}</p>
             <p>{nft.metadata.description}</p>
 
