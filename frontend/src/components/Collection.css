@@ -1,0 +1,95 @@
+/* Collection.css */
+.collection-container {
+    padding: 20px;
+    text-align: center;
+  }
+  
+  .collection-title {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 20px;
+  }
+  
+  .collection-content {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 10px;
+  }
+  
+  .nft-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 20px;
+    width: 100%;
+    max-width: 1200px;
+  }
+  
+  .nft-card {
+    background-color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    transition: transform 0.3s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  .nft-card:hover {
+    transform: translateY(-5px);
+  }
+  
+  .nft-card-image img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    border-bottom: 1px solid #ddd;
+  }
+  
+  .nft-card-info {
+    padding: 15px;
+  }
+  
+  .nft-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 10px;
+  }
+  
+  .nft-description {
+    font-size: 0.9rem;
+    color: #555;
+    margin-bottom: 15px;
+  }
+  
+  .nft-rarity {
+    font-size: 1rem;
+    font-weight: bold;
+    color: #2ecc71;
+  }
+  
+  .nft-feedback {
+    margin-top: 20px;
+    font-size: 1rem;
+    color: #e74c3c;
+  }
+  
+  .nft-success {
+    color: #27ae60;
+  }
+  
+  .nft-error {
+    color: #e74c3c;
+  }
+  
+  .nft-empty-message {
+    font-size: 1.2rem;
+    color: #888;
+  }
+  

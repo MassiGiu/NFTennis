@@ -166,6 +166,37 @@ app.post('/api/mint', upload.single('file'), async (req, res) => {
   }
 });
 
+// Funzione per chiudere automaticamente le aste scadute ogni 30 secondi
+setInterval(() => {
+  console.log("Checking for expired auctions...");
+  closeExpiredAuctions();
+}, 30000);  // 30 secondi
+
+// Funzione che chiude le aste scadute
+async function closeExpiredAuctions() {
+  try {
+    // Ottieni gli ID delle aste attive
+    const auctionIds = await nftennisContract.methods.getActiveAuctions().call();
+
+    // Itera attraverso gli ID delle aste attive
+    for (let i = 0; i < auctionIds.length; i++) {
+      const tokenId = auctionIds[i];
+
+      // Recupera i dettagli dell'asta
+      const auction = await nftennisContract.methods.auctions(tokenId).call();
+
+      // Verifica se l'asta è scaduta
+      if (auction.endTime <= Date.now() / 1000 && auction.open) {
+        // Chiudi l'asta
+        await nftennisContract.methods.endAuction(tokenId).send({ from: ownerAddress, gas: 500000 });
+        console.log(`Auction for token ${tokenId} ended successfully.`);
+      }
+    }
+  } catch (error) {
+    console.error("Error checking or closing auctions:", error);
+  }
+}
+
 
 // Avvio del server
 app.listen(port, () => {

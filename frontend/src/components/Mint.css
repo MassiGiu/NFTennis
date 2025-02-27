@@ -1,0 +1,240 @@
+/* NFT Tennis Minting Page Styles */
+:root {
+    --primary-color: #1db954; /* Verde tennis */
+    --secondary-color: #f0f0f0; /* Grigio chiaro */
+    --accent-color: #ffd700; /* Giallo tennis ball */
+    --text-color: #333;
+    --error-color: #e53935;
+    --success-color: #43a047;
+    --border-radius: 8px;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --transition: all 0.3s ease;
+  }
+  
+  .nft-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: var(--text-color);
+  }
+  
+  .nft-title {
+    text-align: center;
+    margin-bottom: 30px;
+    color: var(--primary-color);
+    font-size: 2.5rem;
+    font-weight: 700;
+  }
+  
+  .nft-content {
+    display: flex;
+    flex-direction: row;
+    gap: 30px;
+  }
+  
+  /* Colonna sinistra - Preview area */
+  .nft-preview-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .nft-preview-box {
+    background-color: var(--secondary-color);
+    border-radius: var(--border-radius);
+    height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    border: 2px dashed #ccc;
+    transition: var(--transition);
+  }
+  
+  .nft-preview-box:hover {
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow);
+  }
+  
+  .nft-upload-placeholder {
+    text-align: center;
+    padding: 20px;
+  }
+  
+  .nft-upload-placeholder p {
+    margin-bottom: 15px;
+    color: #666;
+  }
+  
+  .nft-file-input {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 1;
+  }
+  
+  .nft-upload-button {
+    display: inline-block;
+    background-color: var(--primary-color);
+    color: white;
+    padding: 10px 20px;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: var(--transition);
+  }
+  
+  .nft-upload-button:hover {
+    background-color: #18a349;
+    transform: translateY(-2px);
+  }
+  
+  .nft-preview-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  
+  .nft-preview-image,
+  .nft-preview-video {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  
+  .nft-change-file {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: var(--transition);
+  }
+  
+  .nft-change-file:hover {
+    background-color: rgba(0, 0, 0, 0.9);
+  }
+  
+  .nft-file-info {
+    margin-top: 10px;
+    font-size: 0.9rem;
+    color: #666;
+  }
+  
+  /* Colonna destra - Form fields */
+  .nft-form-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .nft-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .nft-label {
+    font-weight: 600;
+    color: #555;
+  }
+  
+  .nft-input,
+  .nft-textarea,
+  .nft-select {
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    transition: var(--transition);
+  }
+  
+  .nft-input:focus,
+  .nft-textarea:focus,
+  .nft-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.2);
+  }
+  
+  .nft-wallet-display {
+    background-color: #f8f8f8;
+    padding: 12px;
+    border-radius: var(--border-radius);
+    font-family: monospace;
+    border: 1px solid #ddd;
+  }
+  
+  .nft-mint-button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    padding: 14px 20px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    margin-top: 10px;
+  }
+  
+  .nft-mint-button:hover:not(:disabled) {
+    background-color: #18a349;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+  }
+  
+  .nft-mint-button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+  
+  .nft-feedback {
+    padding: 12px;
+    border-radius: var(--border-radius);
+    margin-top: 15px;
+    font-weight: 500;
+  }
+  
+  .nft-success {
+    background-color: rgba(67, 160, 71, 0.1);
+    color: var(--success-color);
+    border: 1px solid var(--success-color);
+  }
+  
+  .nft-error {
+    background-color: rgba(229, 57, 53, 0.1);
+    color: var(--error-color);
+    border: 1px solid var(--error-color);
+  }
+  
+  /* Responsive design */
+  @media (max-width: 768px) {
+    .nft-content {
+      flex-direction: column;
+    }
+    
+    .nft-preview-box {
+      height: 300px;
+    }
+  }
+  
+  /* Tennis ball decorations */
+  .nft-title::before,
+  .nft-title::after {
+    content: '🎾';
+    display: inline-block;
+    margin: 0 10px;
+  }
