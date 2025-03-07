@@ -104,8 +104,14 @@ module.exports = {
   // Configure your compilers
   compilers: {
     solc: {
-        version: "0.8.19", // Aggiorna qui alla versione desiderata
-    }
+      version: "0.8.19",  // Usa la versione che ti interessa
+      settings: {
+        optimizer: {
+          enabled: true,  // Abilita l'ottimizzazione
+          runs: 200       // Imposta i "runs" in base al tuo caso d'uso
+        },
+      },
+    },
 }
   
 

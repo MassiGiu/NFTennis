@@ -1,0 +1,227 @@
+/* NFTPage.css - Dark theme for NFT page with prefixed class names */
+
+.nft-page {
+  --nft-bg-color: #121212;
+  --nft-secondary-bg: #1e1e1e;
+  --nft-text-color: #e0e0e0;
+  --nft-accent-color: #6c5ce7;
+  --nft-success-color: #00b894;
+  --nft-info-color: #0984e3;
+  --nft-border-color: #333;
+  --nft-card-bg: #252525;
+  --nft-input-bg: #333;
+  
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: var(--nft-bg-color);
+  color: var(--nft-text-color);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.nft-page__loading, 
+.nft-page__not-found {
+  text-align: center;
+  padding: 50px;
+  font-size: 1.2rem;
+  color: var(--nft-text-color);
+}
+
+.nft-page__back-button {
+  margin-bottom: 20px;
+  padding: 8px 16px;
+  background-color: var(--nft-secondary-bg);
+  color: var(--nft-text-color);
+  border: 1px solid var(--nft-border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.nft-page__back-button:hover {
+  background-color: var(--nft-border-color);
+}
+
+.nft-page__content {
+  display: flex;
+  gap: 30px;
+}
+
+/* Media container (left side) */
+.nft-page__media-container {
+  flex: 1;
+  max-width: 50%;
+}
+
+.nft-page__media {
+  width: 100%;
+  max-height: 600px;
+  object-fit: contain;
+  border-radius: 8px;
+  background-color: var(--nft-secondary-bg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.nft-page__media--placeholder {
+  height: 500px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--nft-secondary-bg);
+  color: var(--nft-text-color);
+  border: 1px solid var(--nft-border-color);
+}
+
+/* NFT details (right side) */
+.nft-page__details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.nft-page__title {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  color: var(--nft-text-color);
+}
+
+.nft-page__description {
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 20px;
+  color: var(--nft-text-color);
+  opacity: 0.9;
+}
+
+.nft-page__section-title {
+  margin-top: 0;
+  color: var(--nft-accent-color);
+  border-bottom: 1px solid var(--nft-border-color);
+  padding-bottom: 10px;
+}
+
+.nft-page__auction-details {
+  background: var(--nft-card-bg);
+  padding: 20px;
+  border-radius: 8px;
+  margin-top: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.nft-page__auction-info {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.nft-page__info-column p {
+  margin: 8px 0;
+}
+
+.nft-page__info-column strong {
+  color: var(--nft-accent-color);
+  opacity: 0.9;
+}
+
+.nft-page__buy-now-section {
+  margin-top: 25px;
+  border-top: 1px solid var(--nft-border-color);
+  padding-top: 15px;
+}
+
+.nft-page__price-title {
+  color: var(--nft-success-color);
+  margin-bottom: 15px;
+}
+
+.nft-page__buy-now-button {
+  padding: 12px 24px;
+  background-color: var(--nft-success-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.3s ease;
+}
+
+.nft-page__buy-now-button:hover {
+  background-color: #00a785;
+}
+
+.nft-page__bid-form {
+  margin-top: 25px;
+  padding: 20px;
+  border: 1px solid var(--nft-border-color);
+  border-radius: 8px;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.nft-page__form-title {
+  margin-top: 0;
+  color: var(--nft-info-color);
+}
+
+.nft-page__bid-input-container {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.nft-page__input-label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.nft-page__bid-input {
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--nft-border-color);
+  background-color: var(--nft-input-bg);
+  color: var(--nft-text-color);
+}
+
+.nft-page__place-bid-button {
+  padding: 10px 20px;
+  background-color: var(--nft-info-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.nft-page__place-bid-button:hover {
+  background-color: #0874c3;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .nft-page__content {
+    flex-direction: column;
+  }
+
+  .nft-page__media-container {
+    max-width: 100%;
+  }
+
+  .nft-page__auction-info {
+    grid-template-columns: 1fr;
+  }
+  
+  .nft-page__bid-input-container {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .nft-page__input-label {
+    width: 100%;
+  }
+  
+  .nft-page__bid-input {
+    width: 100%;
+  }
+}

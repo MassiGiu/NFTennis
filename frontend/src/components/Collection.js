@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import Web3 from "web3";
-import NFTennisContract from './NFTennis.json';
+import { initWeb3 } from "../utils/web3";
 import { Link } from "react-router-dom";
-import './Collection.css'
+import axios from "axios";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
+import './Collection.css';
 
 const Collection = () => {
   const [web3, setWeb3] = useState(null);
@@ -11,69 +12,161 @@ const Collection = () => {
   const [nfts, setNfts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [auctionDuration, setAuctionDuration] = useState(3600);
-  const [buyNowPrice, setBuyNowPrice] = useState('');
-  const [selectedTokenId, setSelectedTokenId] = useState(null);
-
-  const ABI = NFTennisContract.abi;
-  const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
+  const [activeAuctions, setActiveAuctions] = useState([]);
+  
+  const [nftStates, setNftStates] = useState({});
+  
+  const [stats, setStats] = useState({
+    total: 0,
+    inAuction: 0,
+    rarityDistribution: [
+      { name: 'Common', value: 0, color: '#4CAF50' },
+      { name: 'Rare', value: 0, color: '#FF9800' },
+      { name: 'Legendary', value: 0, color: '#FFEB3B' },
+      { name: 'Masterpiece', value: 0, color: '#9C27B0' }
+    ]
+  });
 
   useEffect(() => {
-    const initWeb3 = async () => {
-      if (window.ethereum) {
-        const web3Instance = new Web3(window.ethereum);
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-        const accounts = await web3Instance.eth.getAccounts();
-        setWeb3(web3Instance);
-        setAccount(accounts[0]);
-        const contractInstance = new web3Instance.eth.Contract(ABI, CONTRACT_ADDRESS);
-        setContract(contractInstance);
-      } else {
-        alert("Please install MetaMask!");
+    const initialize = async () => {
+      const { web3, contract, account } = await initWeb3();
+      if (web3 && contract && account) {
+        setWeb3(web3);
+        setAccount(account);
+        setContract(contract);
       }
     };
-    initWeb3();
+    initialize();
   }, []);
 
   useEffect(() => {
     fetchNFTs();
+    fetchAndCacheAuctionStatus();
   }, [account, web3, contract]);
+
+  useEffect(() => {
+    if (nfts.length > 0) {
+      calculateStats();
+      
+      // Inizializza gli stati per ogni NFT
+      const initialNftStates = nfts.reduce((acc, nft) => {
+        acc[nft.tokenId] = {
+          sellMode: false,
+          auctionDuration: { 
+            days: 0, 
+            hours: 1, 
+            minutes: 0, 
+            seconds: 0 
+          },
+          buyNowPrice: ''
+        };
+        return acc;
+      }, {});
+      
+      setNftStates(initialNftStates);
+    }
+  }, [nfts, activeAuctions]);
+
+  const fetchActiveAuctions = async () => {
+    try {
+      const response = await axios.get('http://localhost:5001/api/nfts/active-auctions');
+      setActiveAuctions(response.data.auctions);
+    } catch (error) {
+      console.error("Error fetching active auctions:", error);
+    }
+  };
+
+  const calculateStats = () => {
+    const inAuctionCount = activeAuctions.length;
+    
+    const rarityCount = {
+      'Common': 0,
+      'Rare': 0,
+      'Legendary': 0,
+      'Masterpiece': 0
+    };
+    
+    nfts.forEach(nft => {
+      const rarity = getRarityName(nft.metadata.attributes);
+      if (rarityCount.hasOwnProperty(rarity)) {
+        rarityCount[rarity]++;
+      } else {
+        rarityCount['Common']++;
+      }
+    });
+    
+    const updatedRarityDistribution = [
+      { name: 'Common', value: rarityCount['Common'], color: '#4CAF50' },
+      { name: 'Rare', value: rarityCount['Rare'], color: '#FF9800' },
+      { name: 'Legendary', value: rarityCount['Legendary'], color: '#FFEB3B' },
+      { name: 'Masterpiece', value: rarityCount['Masterpiece'], color: '#9C27B0' }
+    ].filter(item => item.value > 0);
+    
+    setStats({
+      total: nfts.length,
+      inAuction: inAuctionCount,
+      rarityDistribution: updatedRarityDistribution
+    });
+  };
+
+
+  const fetchAndCacheAuctionStatus = async () => {
+    try {
+      // Recupera l'account corrente dell'utente
+      const currentAccount = await window.ethereum.request({ method: 'eth_accounts' });
+      const userAddress = currentAccount[0];
+      
+      // Recupera le aste attive dall'API o dalla blockchain
+      const response = await axios.get('http://localhost:5001/api/nfts/active-auctions');
+      const auctions = response.data.auctions;
+      
+      // Aggiungi un flag per indicare se l'NFT appartiene all'utente corrente
+      const auctionsWithOwnership = auctions.map(auction => {
+        return {
+          ...auction,
+          isOwnedByUser: auction.ownerAddress && 
+                         auction.ownerAddress.toLowerCase() === userAddress.toLowerCase()
+        };
+      });
+      
+      // Salva nella sessione o localStorage per mantenere lo stato tra i refresh
+      localStorage.setItem('activeAuctions', JSON.stringify(auctionsWithOwnership));
+      
+      // Aggiorna lo stato React
+      setActiveAuctions(auctionsWithOwnership);
+      return auctionsWithOwnership;
+      
+    } catch (error) {
+      console.error("Error fetching active auctions:", error);
+      // In caso di errore, prova a recuperare dalla cache
+      const cachedAuctions = JSON.parse(localStorage.getItem('activeAuctions') || '[]');
+      return cachedAuctions;
+    }
+  };
 
   const fetchNFTs = async () => {
     if (!account || !web3 || !contract) return;
-
     try {
       setLoading(true);
       setFeedback("");
-      
-      // Recuperiamo gli ID degli NFT posseduti dall'utente
       const ownedNFTs = await contract.methods.getOwnedNFTs(account).call();
-      
       if (ownedNFTs.length === 0) {
         setFeedback("No NFTs found in your collection.");
         setNfts([]);
         setLoading(false);
         return;
       }
-
-      // Recuperiamo i metadati di ciascun NFT
       const nftDetails = await Promise.all(ownedNFTs.map(async (tokenId) => {
         const tokenURI = await contract.methods.tokenURI(tokenId).call();
-        
-        // Per semplicità, supponiamo che tokenURI contenga l'URL del JSON con i metadati
         const response = await fetch(tokenURI);
         const metadata = await response.json();
-        
-        // Verifichiamo se l'NFT è già in un'asta attiva
         const isInAuction = await isNFTInAuction(tokenId);
-        
         return {
           tokenId,
           metadata,
           isInAuction
         };
       }));
-
       setNfts(nftDetails);
     } catch (error) {
       console.error("Error fetching NFTs:", error);
@@ -83,15 +176,20 @@ const Collection = () => {
     }
   };
 
-  // Funzione per verificare se un NFT è già in un'asta attiva
   const isNFTInAuction = async (tokenId) => {
+    // Prima prova a controllare la cache
+    const cachedAuctions = JSON.parse(localStorage.getItem('activeAuctions') || '[]');
+    const isInCachedAuctions = cachedAuctions.some(auction => 
+      auction.tokenId.toString() === tokenId.toString()
+    );
+    
+    if (isInCachedAuctions) return true;
+    
+    // Se non è nella cache, controlla il contratto
     if (!contract) return false;
     
     try {
-      // Ottieni tutte le aste attive
       const activeAuctions = await contract.methods.getActiveAuctions().call();
-      
-      // Verifica se il tokenId è nell'elenco delle aste attive
       return activeAuctions.includes(tokenId.toString());
     } catch (error) {
       console.error(`Error checking auction status for token ${tokenId}:`, error);
@@ -99,146 +197,386 @@ const Collection = () => {
     }
   };
 
-  const startAuction = async (tokenId) => {
-    try {
-      if (!contract) throw new Error("Contract not initialized");
-      if (!auctionDuration || isNaN(auctionDuration) || auctionDuration <= 0) {
-        alert("Please enter a valid auction duration (in seconds).");
-        return;
+  // Nuove funzioni per gestire gli stati dei singoli NFT
+  const toggleSellMode = (tokenId) => {
+    setNftStates(prev => ({
+      ...prev,
+      [tokenId]: {
+        ...prev[tokenId],
+        sellMode: !prev[tokenId].sellMode
       }
-      if (!buyNowPrice || isNaN(buyNowPrice) || buyNowPrice <= 0) {
-        alert("Please enter a valid Buy Now price.");
-        return;
-      }
-      
-      const buyNowPriceInWei = web3.utils.toWei(buyNowPrice, "ether");
-  
-      setFeedback("Checking approval status...");
-      
-      // Verifica se il contratto è già approvato per gestire questo token
-      const approvedAddress = await contract.methods.getApproved(tokenId).call();
-      if (approvedAddress.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase()) {
-        setFeedback("Approving contract to handle your NFT...");
-        // Approva il contratto a gestire il token
-        await contract.methods.approve(CONTRACT_ADDRESS, tokenId).send({ from: account });
-        setFeedback("Approval successful! Now starting auction...");
-      }
-      
-      // Ora che abbiamo l'approvazione, possiamo avviare l'asta
-      setFeedback("Starting auction... Please wait and confirm the transaction in MetaMask.");
-      
-      await contract.methods.startAuction(tokenId, auctionDuration, buyNowPriceInWei).send({ 
-        from: account,
-        gas: 300000  // Specifico un gas limit più alto per essere sicuri
-      });
-      
-      // Reset dei valori di input
-      setAuctionDuration(3600);
-      setBuyNowPrice('');
-      setSelectedTokenId(null);
-      
-      setFeedback("Auction started successfully!");
-      
-      // Aggiorna la lista degli NFT dopo l'inizio dell'asta
-      fetchNFTs();
-    } catch (error) {
-      console.error("Error starting auction:", error);
-      setFeedback(`Failed to start auction: ${error.message}`);
-    }
+    }));
   };
 
-  const rarityMapping = {
-    0: "Common",
-    1: "Rare",
-    2: "Legendary"
+  const handleDurationChange = (tokenId, field, value) => {
+    setNftStates(prev => ({
+      ...prev,
+      [tokenId]: {
+        ...prev[tokenId],
+        auctionDuration: {
+          ...prev[tokenId].auctionDuration,
+          [field]: Math.max(0, prev[tokenId].auctionDuration[field] + value)
+        }
+      }
+    }));
+  };
+
+  const handleBuyNowPriceChange = (tokenId, price) => {
+    setNftStates(prev => ({
+      ...prev,
+      [tokenId]: {
+        ...prev[tokenId],
+        buyNowPrice: price
+      }
+    }));
+  };
+
+ const startAuction = async (tokenId) => {
+  const { auctionDuration, buyNowPrice } = nftStates[tokenId];
+  
+  try {
+    if (!contract) throw new Error("Contract not initialized");
+    
+    const durationInSeconds = 
+      auctionDuration.days * 86400 + 
+      auctionDuration.hours * 3600 + 
+      auctionDuration.minutes * 60 + 
+      auctionDuration.seconds;
+    
+    if (durationInSeconds <= 0) {
+      alert("La durata dell'asta deve essere maggiore di zero.");
+      return;
+    }
+    
+    if (!buyNowPrice || isNaN(buyNowPrice) || buyNowPrice <= 0) {
+      alert("Inserisci un prezzo di acquisto valido.");
+      return;
+    }
+    
+    const buyNowPriceInWei = web3.utils.toWei(buyNowPrice, "ether");
+    setFeedback("Verifico lo stato di approvazione...");
+    
+    const approvedAddress = await contract.methods.getApproved(tokenId).call();
+    if (approvedAddress.toLowerCase() !== process.env.REACT_APP_CONTRACT_ADDRESS.toLowerCase()) {
+      setFeedback("Approvo il contratto per gestire il tuo NFT...");
+      await contract.methods.approve(process.env.REACT_APP_CONTRACT_ADDRESS, tokenId).send({ from: account });
+      setFeedback("Approvazione completata! Ora avvio l'asta...");
+    }
+    
+    setFeedback("Avvio dell'asta... Attendi e conferma la transazione in MetaMask.");
+    await contract.methods.startAuction(tokenId, durationInSeconds, buyNowPriceInWei).send({
+      from: account,
+      gas: 300000
+    });
+    
+    // Update local state to immediately reflect the NFT is in auction
+    const updatedNfts = nfts.map(nft => 
+      nft.tokenId === tokenId ? { ...nft, isInAuction: true } : nft
+    );
+    
+    setNfts(updatedNfts);
+    
+    // Resetta lo stato dell'NFT specifico
+    setNftStates(prev => ({
+      ...prev,
+      [tokenId]: {
+        ...prev[tokenId],
+        sellMode: false,
+        auctionDuration: { days: 0, hours: 1, minutes: 0, seconds: 0 },
+        buyNowPrice: ''
+      }
+    }));
+    
+    setFeedback("Asta avviata con successo!");
+    
+    // Aggiorna i dati
+    fetchActiveAuctions();
+  } catch (error) {
+    console.error("Error starting auction:", error);
+    setFeedback(`Impossibile avviare l'asta: ${error.message}`);
+  }
+};
+
+  const getRarityName = (attributes) => {
+    if (attributes && attributes.length > 0) {
+      const rarityAttribute = attributes.find(attr => attr.trait_type === "Rarity");
+      if (rarityAttribute) {
+        return rarityAttribute.value || "Unknown";
+      }
+    }
+    return "Unknown";
+  };
+
+  const renderMedia = (metadata) => {
+    if (metadata.animation_url) {
+      return (
+        <video 
+          className="nft-media"
+          controls
+          loop
+          playsInline
+        >
+          <source src={metadata.animation_url} type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
+      );
+    }
+  
+    if (metadata.image) {
+      return <img src={metadata.image} alt={metadata.name} className="nft-media" />;
+    }
+  
+    return <div className="nft-no-media">No media available</div>;
+  };
+
+  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text 
+        x={x} 
+        y={y} 
+        fill="white" 
+        textAnchor="middle" 
+        dominantBaseline="central"
+        fontWeight="bold"
+      >
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
   };
 
   return (
-    <div className="collection-container">
-      <h1 className="collection-title">Your NFTennis Collection</h1>
+    <div className="nft-collection-page">
+      <h1 className="collection-title">Your NFT Collection</h1>
       
+      {/* Stats Section */}
+      <div className="stats-container">
+        <div className="stats-card">
+          <h3>Total NFT:</h3>
+          <p className="stats-number">{stats.total}</p>
+        </div>
+        
+        <div className="stats-chart-card">
+          <h3>Rarity Distribution:</h3>
+          <div className="stats-chart-container">
+            <ResponsiveContainer width="50%" height={200}>
+              <PieChart>
+                <Pie
+                  data={stats.rarityDistribution}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                  label={renderCustomizedLabel}
+                >
+                  {stats.rarityDistribution.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+
+            <div className="legend-container">
+              <ul>
+                {stats.rarityDistribution.map((item, index) => (
+                  <li key={index} style={{ color: item.color }}>
+                    {item.name}: {item.value}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+        
+        <div className="stats-card">
+          <h3>In Auction:</h3>
+          <p className="stats-number">{stats.inAuction}</p>
+        </div>
+      </div>
+      
+      {/* Collection Section */}
       <div className="collection-content">
-        {/* Mostra gli NFT */}
-        <div className="nft-grid">
-          {loading ? (
-            <p>Loading your NFTs...</p>
-          ) : (
-            <>
-              {nfts.length === 0 ? (
-                <p>No NFTs found in your collection.</p>
-              ) : (
-                nfts.map((nft, index) => (
+        {loading ? (
+          <div className="loading-message">Loading your NFTs...</div>
+        ) : (
+          <>
+            {nfts.length === 0 ? (
+              <div className="nft-empty-message">
+                No NFTs found in your collection.
+              </div>
+            ) : (
+              <div className="nft-grid">
+                {nfts.map((nft) => (
                   <div 
-                    key={index} 
-                    className={`nft-card ${selectedTokenId === nft.tokenId ? "selected" : ""}`}
-                    onClick={() => setSelectedTokenId(selectedTokenId === nft.tokenId ? null : nft.tokenId)}
+                    key={nft.tokenId} 
+                    className={`nft-card-new ${nftStates[nft.tokenId]?.sellMode ? 'sell-mode-active' : ''}`}
                   >
-                    <div className="nft-card-image">
-                      <img src={nft.metadata.image} alt={nft.metadata.name} className="nft-image" />
-                    </div>
-                    <div className="nft-card-info">
-                      <h3 className="nft-name">{nft.metadata.name}</h3>
-                      <p className="nft-description">{nft.metadata.description}</p>
-                      <p className="nft-rarity">Rarity: {rarityMapping[nft.metadata.attributes?.[0]?.value] || "Unknown"}</p>
-                      <p className="nft-status">
-                        Status: <span className={nft.isInAuction ? "in-auction" : "not-in-auction"}>
-                          {nft.isInAuction ? "In Auction" : "Not Listed"}
-                        </span>
-                      </p>
+                    <div className="nft-image-container">
+                      {/* Bollino "In Asta" */}
+                      {nft.isInAuction && (
+                        <div className="auction-badge">In Auction</div>
+                      )}
+                      {nft.metadata && renderMedia(nft.metadata)}
                     </div>
                     
-                    {selectedTokenId === nft.tokenId && !nft.isInAuction && (
-                      <div className="auction-form">
-                        <h4>Start Auction</h4>
+                    <div className="nft-action-section">
+                      <div className="nft-action-buttons">
+                        {!nft.isInAuction ? (
+                          <>
+                            <button 
+                              className="btn-action btn-sell" 
+                              onClick={() => toggleSellMode(nft.tokenId)}
+                            >
+                              Sell
+                            </button>
+                            <Link 
+                              to={`/nft/${nft.tokenId}`} 
+                              className="btn-action btn-info"
+                            >
+                              Info
+                            </Link>
+                          </>
+                        ) : (
+                            <Link 
+                              to={`/nft/${nft.tokenId}`} 
+                              className="btn-action btn-info"
+                            >
+                              Info
+                            </Link>
+                        )}
+                        </div>
+                    </div>
+                    
+                    {nftStates[nft.tokenId] && nftStates[nft.tokenId].sellMode && !nft.isInAuction && (
+                      <div className="auction-form-new">    
+                        <div className="duration-inputs">
+                          <div className="duration-input-group">
+                            <label>Days</label>
+                            <div className="duration-controls">
+                              <button 
+                                className="duration-btn" 
+                                onClick={() => handleDurationChange(nft.tokenId, 'days', -1)}
+                              >
+                                &minus;
+                              </button>
+                              <span className="duration-value">
+                                {nftStates[nft.tokenId].auctionDuration.days}
+                              </span>
+                              <button 
+                                className="duration-btn" 
+                                onClick={() => handleDurationChange(nft.tokenId, 'days', 1)}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <div className="duration-input-group">
+                            <label>Hours</label>
+                            <div className="duration-controls">
+                              <button 
+                                className="duration-btn" 
+                                onClick={() => handleDurationChange(nft.tokenId, 'hours', -1)}
+                              >
+                                &minus;
+                              </button>
+                              <span className="duration-value">
+                                {nftStates[nft.tokenId].auctionDuration.hours}
+                              </span>
+                              <button 
+                                className="duration-btn" 
+                                onClick={() => handleDurationChange(nft.tokenId, 'hours', 1)}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <div className="duration-input-group">
+                            <label>Minutes</label>
+                            <div className="duration-controls">
+                              <button 
+                                className="duration-btn" 
+                                onClick={() => handleDurationChange(nft.tokenId, 'minutes', -1)}
+                              >
+                                &minus;
+                              </button>
+                              <span className="duration-value">
+                                {nftStates[nft.tokenId].auctionDuration.minutes}
+                              </span>
+                              <button 
+                                className="duration-btn" 
+                                onClick={() => handleDurationChange(nft.tokenId, 'minutes', 1)}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <div className="duration-input-group">
+                            <label>Seconds</label>
+                            <div className="duration-controls">
+                              <button 
+                                className="duration-btn" 
+                                onClick={() => handleDurationChange(nft.tokenId, 'seconds', -1)}
+                              >
+                                &minus;
+                              </button>
+                              <span className="duration-value">
+                                {nftStates[nft.tokenId].auctionDuration.seconds}
+                              </span>
+                              <button 
+                                className="duration-btn" 
+                                onClick={() => handleDurationChange(nft.tokenId, 'seconds', 1)}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        
                         <div className="form-group">
-                          <label htmlFor={`duration-${nft.tokenId}`}>Auction Duration (seconds):</label>
+                          <label>Buy Now Price (ETH):</label>
                           <input
-                            id={`duration-${nft.tokenId}`}
                             type="number"
-                            value={auctionDuration}
-                            onChange={(e) => setAuctionDuration(e.target.value)}
+                            step="0.01"
+                            value={nftStates[nft.tokenId].buyNowPrice}
+                            onChange={(e) => handleBuyNowPriceChange(nft.tokenId, e.target.value)}
                             className="form-input"
                           />
                         </div>
-                        <div className="form-group">
-                          <label htmlFor={`price-${nft.tokenId}`}>Buy Now Price (ETH):</label>
-                          <input
-                            id={`price-${nft.tokenId}`}
-                            type="text"
-                            value={buyNowPrice}
-                            onChange={(e) => setBuyNowPrice(e.target.value)}
-                            className="form-input"
-                          />
+                        
+                        <div className="auction-buttons">
+                          <button
+                            className="btn-start-auction"
+                            onClick={() => startAuction(nft.tokenId)}
+                          >
+                            Start Auction
+                          </button>
+                          <button
+                            className="btn-cancel"
+                            onClick={() => toggleSellMode(nft.tokenId)}
+                          >
+                            Cancel
+                          </button>
                         </div>
-                        <button 
-                          className="start-auction-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startAuction(nft.tokenId);
-                          }}
-                        >
-                          Start Auction
-                        </button>
-                      </div>
-                    )}
-                    
-                    {selectedTokenId === nft.tokenId && nft.isInAuction && (
-                      <div className="auction-info">
-                        <p>This NFT is currently in an auction.</p>
-                        <Link to="/marketplace" className="view-auction-btn">
-                          Go to Marketplace
-                        </Link>
                       </div>
                     )}
                   </div>
-                ))
-              )}
-            </>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
-
-      {feedback && <p className={`nft-feedback ${feedback.includes("Error") ? "nft-error" : "nft-success"}`}>{feedback}</p>}
+      
+      {feedback && <div className={`feedback-message ${feedback.includes("success") ? "nft-success" : "nft-error"}`}>{feedback}</div>}
     </div>
   );
 };

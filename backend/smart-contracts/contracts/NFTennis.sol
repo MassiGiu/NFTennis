@@ -7,7 +7,15 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 contract NFTennis is ERC721URIStorage, Ownable, ReentrancyGuard {
     uint256 public tokenCounter;
-    uint256[] public activeAuctions; // Array che tiene traccia delle aste attive
+    uint256[] public activeAuctions;
+
+    enum Rarity { COMMON, RARE, LEGENDARY, MASTERPIECE }
+    enum MediaType { IMAGE, VIDEO }
+
+    struct NFTMetadata {
+        Rarity rarity;
+        MediaType mediaType;
+    }
 
     struct Auction {
         address payable seller;
@@ -19,62 +27,86 @@ contract NFTennis is ERC721URIStorage, Ownable, ReentrancyGuard {
     }
 
     mapping(uint256 => Auction) public auctions;
-    mapping(address => uint256[]) private ownedTokens; // Mappatura degli indirizzi ai loro NFT
+    mapping(address => uint256[]) private ownedTokens;
+    mapping(uint256 => NFTMetadata) public tokenMetadata;
 
-    event NFTMinted(uint256 tokenId, address recipient, string tokenURI);
-    event AuctionStarted(uint256 tokenId, address seller, uint256 endTime, uint256 buyNowPrice);
-    event NewBid(uint256 tokenId, address bidder, uint256 bidAmount);
-    event AuctionEnded(uint256 tokenId, address winner, uint256 winningBid);
-    event NFTBought(uint256 tokenId, address buyer, uint256 price);
-    event TokenTransferred(uint256 tokenId, address from, address to);
+    // Custom errors per ridurre dimensioni bytecode
+    error InvalidAddress();
+    error EmptyTokenURI();
+    error InvalidMediaRarity();
+    error NotOwner();
+    error AuctionAlreadyOpen();
+    error InvalidDuration();
+    error InvalidPrice();
+    error AuctionClosed();
+    error AuctionExpired();
+    error BidTooLow();
+    error BidTooHigh();
+    error SellerCannotBid();
+    error SellerCannotBuyOwnNFT();
+    error RefundFailed();
+    error TransferFailed();
+    error TokenDoesNotExist();
+
+    // Eventi ottimizzati
+    event NFTMinted(uint256 indexed tokenId, address indexed recipient);
+    event AuctionStarted(uint256 indexed tokenId, address indexed seller, uint256 endTime);
+    event NewBid(uint256 indexed tokenId, address indexed bidder, uint256 bidAmount);
+    event AuctionEnded(uint256 indexed tokenId, address indexed winner, uint256 winningBid);
+    event NFTBought(uint256 indexed tokenId, address indexed buyer, uint256 price);
+    event TokenTransferred(uint256 indexed tokenId, address indexed from, address indexed to);
 
     constructor() ERC721("NFTennis", "NFTN") {
         tokenCounter = 0;
     }
 
-    function mintNFT(address recipient, string memory tokenURI) public onlyOwner {
-        require(recipient != address(0), "Invalid recipient address");
-        require(bytes(tokenURI).length > 0, "Token URI cannot be empty");
+    function mintNFT(address recipient, string calldata tokenURI, Rarity rarity, MediaType mediaType) external onlyOwner {
+        if (recipient == address(0)) revert InvalidAddress();
+        if (bytes(tokenURI).length == 0) revert EmptyTokenURI();
+        
+        // Validazione compatibilità rarità e tipo di media
+        bool isValid = mediaType == MediaType.VIDEO 
+                      ? rarity == Rarity.MASTERPIECE 
+                      : (rarity == Rarity.COMMON || rarity == Rarity.RARE || rarity == Rarity.LEGENDARY);
+        
+        if (!isValid) revert InvalidMediaRarity();
 
-        uint256 tokenId = tokenCounter;
+        uint256 tokenId = tokenCounter++;
         _mint(recipient, tokenId);
         _setTokenURI(tokenId, tokenURI);
-        tokenCounter += 1;
-
-        // Aggiornamento della mappatura dei token posseduti
+        
+        tokenMetadata[tokenId] = NFTMetadata({
+            rarity: rarity,
+            mediaType: mediaType
+        });
+        
         ownedTokens[recipient].push(tokenId);
-
-        emit NFTMinted(tokenId, recipient, tokenURI);
+        emit NFTMinted(tokenId, recipient);
     }
 
-    // Funzione per gestire il trasferimento e aggiornare ownedTokens
-    function _transferToken(address from, address to, uint256 tokenId) internal {
-        // Rimuovi il token dalla lista del mittente
+    function _updateOwnedTokens(address from, address to, uint256 tokenId) internal {
         uint256[] storage fromTokens = ownedTokens[from];
         for (uint256 i = 0; i < fromTokens.length; i++) {
             if (fromTokens[i] == tokenId) {
-                // Sposta l'ultimo elemento nella posizione corrente
                 fromTokens[i] = fromTokens[fromTokens.length - 1];
-                // Rimuovi l'ultimo elemento
                 fromTokens.pop();
                 break;
             }
         }
-
-        // Aggiungi il token alla lista del destinatario
         ownedTokens[to].push(tokenId);
-        
-        // Esegui il trasferimento standard ERC721
+    }
+
+    function _transferToken(address from, address to, uint256 tokenId) internal {
+        _updateOwnedTokens(from, to, tokenId);
         _transfer(from, to, tokenId);
-        
         emit TokenTransferred(tokenId, from, to);
     }
 
-    function startAuction(uint256 tokenId, uint256 duration, uint256 buyNowPrice) public {
-        require(ownerOf(tokenId) == msg.sender, "Only the owner can start an auction");
-        require(!auctions[tokenId].open, "Auction already open for this token");
-        require(duration > 0, "Auction duration must be greater than zero");
-        require(buyNowPrice > 0, "Buy now price must be greater than zero");
+    function startAuction(uint256 tokenId, uint256 duration, uint256 buyNowPrice) external {
+        if (ownerOf(tokenId) != msg.sender) revert NotOwner();
+        if (auctions[tokenId].open) revert AuctionAlreadyOpen();
+        if (duration == 0) revert InvalidDuration();
+        if (buyNowPrice == 0) revert InvalidPrice();
 
         auctions[tokenId] = Auction({
             seller: payable(msg.sender),
@@ -85,31 +117,26 @@ contract NFTennis is ERC721URIStorage, Ownable, ReentrancyGuard {
             buyNowPrice: buyNowPrice
         });
 
-        // Aggiungi l'ID dell'asta all'array activeAuctions
         activeAuctions.push(tokenId);
-
-        emit AuctionStarted(tokenId, msg.sender, auctions[tokenId].endTime, buyNowPrice);
+        emit AuctionStarted(tokenId, msg.sender, block.timestamp + duration);
     }
 
-    function bid(uint256 tokenId) public payable nonReentrant {
+    function bid(uint256 tokenId) external payable nonReentrant {
         Auction storage currentAuction = auctions[tokenId];
 
-        // Check if the auction has expired
         if (block.timestamp >= currentAuction.endTime) {
-            // If expired, close the auction automatically
             endAuction(tokenId);
-            revert("Auction has already ended");
+            revert AuctionExpired();
         }
 
-        require(currentAuction.open, "Auction is closed");
-        require(msg.value > currentAuction.highestBid, "Bid must be higher than the current highest bid");
-        require(msg.value <= currentAuction.buyNowPrice, "Bid exceeds the buy now price");
-        require(msg.sender != currentAuction.seller, "Seller cannot bid");
+        if (!currentAuction.open) revert AuctionClosed();
+        if (msg.value <= currentAuction.highestBid) revert BidTooLow();
+        if (msg.value > currentAuction.buyNowPrice) revert BidTooHigh();
+        if (msg.sender == currentAuction.seller) revert SellerCannotBid();
 
-        // Refund previous highest bidder
         if (currentAuction.highestBidder != address(0)) {
             (bool success, ) = currentAuction.highestBidder.call{value: currentAuction.highestBid}("");
-            require(success, "Failed to refund previous bidder");
+            if (!success) revert RefundFailed();
         }
 
         currentAuction.highestBid = msg.value;
@@ -117,135 +144,106 @@ contract NFTennis is ERC721URIStorage, Ownable, ReentrancyGuard {
 
         emit NewBid(tokenId, msg.sender, msg.value);
 
-        // If bid meets or exceeds the buy-now price, end the auction
-        if (currentAuction.highestBid >= currentAuction.buyNowPrice) {
+        if (msg.value >= currentAuction.buyNowPrice) {
             endAuction(tokenId);
         }
     }
 
-    function buyNow(uint256 tokenId) public payable nonReentrant {
+    function buyNow(uint256 tokenId) external payable nonReentrant {
         Auction storage currentAuction = auctions[tokenId];
-        require(currentAuction.open, "Auction is closed");
-        require(msg.value == currentAuction.buyNowPrice, "Must pay the exact buy now price");
+        
+        if (!currentAuction.open) revert AuctionClosed();
+        if (msg.value != currentAuction.buyNowPrice) revert InvalidPrice();
+        if (msg.sender == currentAuction.seller) revert SellerCannotBuyOwnNFT();
 
-        // Refund previous highest bidder
         if (currentAuction.highestBidder != address(0)) {
             (bool success, ) = currentAuction.highestBidder.call{value: currentAuction.highestBid}("");
-            require(success, "Failed to refund previous bidder");
+            if (!success) revert RefundFailed();
         }
 
-        // Chiudi l'asta prima di eseguire il trasferimento
         currentAuction.open = false;
-
-        // Trasferisci l'NFT al compratore usando _transferToken
         _transferToken(currentAuction.seller, msg.sender, tokenId);
 
-        // Trasferisci i fondi al venditore
         (bool successSeller, ) = currentAuction.seller.call{value: msg.value}("");
-        require(successSeller, "Failed to transfer funds to seller");
+        if (!successSeller) revert TransferFailed();
 
-        // Rimuovi l'asta dall'elenco delle aste attive
+        _removeFromActiveAuctions(tokenId);
+        emit NFTBought(tokenId, msg.sender, msg.value);
+    }
+
+
+    function _removeFromActiveAuctions(uint256 tokenId) internal {
         for (uint256 i = 0; i < activeAuctions.length; i++) {
             if (activeAuctions[i] == tokenId) {
-                activeAuctions[i] = activeAuctions[activeAuctions.length - 1]; // Move the last element to current position
-                activeAuctions.pop(); // Remove the last element
+                activeAuctions[i] = activeAuctions[activeAuctions.length - 1];
+                activeAuctions.pop();
                 break;
             }
         }
-
-        emit NFTBought(tokenId, msg.sender, msg.value);
     }
 
     function endAuction(uint256 tokenId) public nonReentrant {
         Auction storage currentAuction = auctions[tokenId];
-        require(currentAuction.open, "Auction is already closed");
+        if (!currentAuction.open) revert AuctionClosed();
 
-        // Chiudere l'asta prima di effettuare altre operazioni
         currentAuction.open = false;
 
-        // Se c'è un offerente vincitore
         if (currentAuction.highestBidder != address(0)) {
-            // Trasferire l'NFT all'offerente vincitore usando _transferToken
             _transferToken(currentAuction.seller, currentAuction.highestBidder, tokenId);
 
-            // Trasferire i fondi al venditore
             (bool success, ) = currentAuction.seller.call{value: currentAuction.highestBid}("");
-            require(success, "Failed to transfer funds to seller");
+            if (!success) revert TransferFailed();
 
             emit AuctionEnded(tokenId, currentAuction.highestBidder, currentAuction.highestBid);
         } else {
-            // Nessun offerente: l'NFT rimane al venditore
             emit AuctionEnded(tokenId, address(0), 0);
         }
 
-        // Rimuovere l'asta dall'elenco delle aste attive
-        for (uint256 i = 0; i < activeAuctions.length; i++) {
-            if (activeAuctions[i] == tokenId) {
-                activeAuctions[i] = activeAuctions[activeAuctions.length - 1]; // Sostituire con l'ultimo elemento
-                activeAuctions.pop(); // Rimuovere l'ultimo elemento
-                break;
-            }
-        }
+        _removeFromActiveAuctions(tokenId);
     }
 
-    // Override di transferFrom per aggiornare ownedTokens
+    // Override delle funzioni di trasferimento
     function transferFrom(address from, address to, uint256 tokenId) public override {
         super.transferFrom(from, to, tokenId);
-        
-        // Aggiorna la mappatura ownedTokens
-        uint256[] storage fromTokens = ownedTokens[from];
-        for (uint256 i = 0; i < fromTokens.length; i++) {
-            if (fromTokens[i] == tokenId) {
-                fromTokens[i] = fromTokens[fromTokens.length - 1];
-                fromTokens.pop();
-                break;
-            }
-        }
-        
-        ownedTokens[to].push(tokenId);
+        _updateOwnedTokens(from, to, tokenId);
     }
     
-    // Override di safeTransferFrom per aggiornare ownedTokens
     function safeTransferFrom(address from, address to, uint256 tokenId) public override {
         super.safeTransferFrom(from, to, tokenId);
-        
-        // Aggiorna la mappatura ownedTokens
-        uint256[] storage fromTokens = ownedTokens[from];
-        for (uint256 i = 0; i < fromTokens.length; i++) {
-            if (fromTokens[i] == tokenId) {
-                fromTokens[i] = fromTokens[fromTokens.length - 1];
-                fromTokens.pop();
-                break;
-            }
-        }
-        
-        ownedTokens[to].push(tokenId);
+        _updateOwnedTokens(from, to, tokenId);
     }
     
-    // Override di safeTransferFrom (con data) per aggiornare ownedTokens
     function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data) public override {
         super.safeTransferFrom(from, to, tokenId, data);
-        
-        // Aggiorna la mappatura ownedTokens
-        uint256[] storage fromTokens = ownedTokens[from];
-        for (uint256 i = 0; i < fromTokens.length; i++) {
-            if (fromTokens[i] == tokenId) {
-                fromTokens[i] = fromTokens[fromTokens.length - 1];
-                fromTokens.pop();
-                break;
-            }
-        }
-        
-        ownedTokens[to].push(tokenId);
+        _updateOwnedTokens(from, to, tokenId);
     }
 
-    // Funzione per ottenere gli NFT posseduti da un indirizzo
-    function getOwnedNFTs(address owner) public view returns (uint256[] memory) {
+    // Funzioni di visualizzazione 
+    function getOwnedNFTs(address owner) external view returns (uint256[] memory) {
         return ownedTokens[owner];
     }
 
-    // Funzione per ottenere gli ID delle aste attive
-    function getActiveAuctions() public view returns (uint256[] memory) {
+    function getActiveAuctions() external view returns (uint256[] memory) {
         return activeAuctions;
+    }
+    
+    function getTokenMetadata(uint256 tokenId) external view returns (Rarity, MediaType) {
+        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        NFTMetadata memory metadata = tokenMetadata[tokenId];
+        return (metadata.rarity, metadata.mediaType);
+    }
+    
+    function getRarityName(Rarity rarity) external pure returns (string memory) {
+        if (rarity == Rarity.COMMON) return "Common";
+        if (rarity == Rarity.RARE) return "Rare";
+        if (rarity == Rarity.LEGENDARY) return "Legendary";
+        if (rarity == Rarity.MASTERPIECE) return "Masterpiece";
+        return "";
+    }
+    
+    function getMediaTypeName(MediaType mediaType) external pure returns (string memory) {
+        if (mediaType == MediaType.IMAGE) return "Image";
+        if (mediaType == MediaType.VIDEO) return "Video";
+        return "";
     }
 }

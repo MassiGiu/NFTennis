@@ -1,524 +1,411 @@
-import React, { useEffect, useState } from "react";
-import Web3 from "web3";
-import NFTennisContract from "./NFTennis.json";
-
-const ABI = NFTennisContract.abi;
-const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
+import React, { useEffect, useState, useRef } from "react";
+import { initWeb3 } from "../utils/web3";
+import { Link } from "react-router-dom";
+import axios from "axios";
+import "./Marketplace.css";
 
 const Marketplace = () => {
   const [web3, setWeb3] = useState(null);
   const [contract, setContract] = useState(null);
   const [account, setAccount] = useState(null);
   const [nfts, setNfts] = useState([]);
-  const [myNfts, setMyNfts] = useState([]);
-  const [remainingTimes, setRemainingTimes] = useState({});
-  const [bidAmount, setBidAmount] = useState('');
-  const [selectedTokenId, setSelectedTokenId] = useState(null);
+  const [filteredNfts, setFilteredNfts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('auctions'); // 'auctions' o 'myNFTs'
+  
+  // Filter states
+  const [playerName, setPlayerName] = useState("");
+  const [rarity, setRarity] = useState("");
+  const [minPrice, setMinPrice] = useState("0");
+  const [maxPrice, setMaxPrice] = useState("10");
+  const [showFilters, setShowFilters] = useState(false);
+  const [maxPriceInMarket, setMaxPriceInMarket] = useState(10);
+  
+  // Refs for range slider
+  const rangeTrackRef = useRef(null);
+  const minHandleRef = useRef(null);
+  const maxHandleRef = useRef(null);
+  const rangeSelectedRef = useRef(null);
 
   useEffect(() => {
-    const initWeb3 = async () => {
-      try {
-        if (window.ethereum) {
-          const web3Instance = new Web3(window.ethereum);
-          await window.ethereum.request({ method: "eth_requestAccounts" });
-          const accounts = await web3Instance.eth.getAccounts();
-          setWeb3(web3Instance);
-          setAccount(accounts[0]);
-          
-          // Ascolta i cambiamenti di account
-          window.ethereum.on('accountsChanged', function (accounts) {
-            setAccount(accounts[0]);
-          });
-          
-          const contractInstance = new web3Instance.eth.Contract(ABI, CONTRACT_ADDRESS);
-          setContract(contractInstance);
-        } else {
-          alert("Please install MetaMask!");
-        }
-      } catch (error) {
-        console.error("Error initializing Web3:", error);
+    const loadWeb3 = async () => {
+      const web3Data = await initWeb3();
+      if (web3Data) {
+        setWeb3(web3Data.web3);
+        setContract(web3Data.contract);
+        setAccount(web3Data.account);
       }
     };
-
-    initWeb3();
-    
-    // Cleanup
-    return () => {
-      if (window.ethereum) {
-        window.ethereum.removeAllListeners('accountsChanged');
-      }
-    };
+    loadWeb3();
   }, []);
 
   useEffect(() => {
-    if (contract) {
-      fetchActiveAuctions();
-    }
-  }, [contract]);
-  
+    fetchActiveAuctions();
+  }, []);
+
+  // Update filtered NFTs when filters or NFT list changes
   useEffect(() => {
-    if (contract && account) {
-      fetchMyNFTs();
-    }
-  }, [contract, account]);
+    applyFilters();
+  }, [nfts, playerName, rarity, minPrice, maxPrice]);
+
+  // Update the price range slider visualization
+  useEffect(() => {
+    updateRangeSlider();
+  }, [minPrice, maxPrice, maxPriceInMarket]);
+
+  const updateRangeSlider = () => {
+    if (!rangeTrackRef.current || !rangeSelectedRef.current || 
+        !minHandleRef.current || !maxHandleRef.current) return;
+
+    const trackWidth = rangeTrackRef.current.offsetWidth;
+    const minPercent = (parseFloat(minPrice) / maxPriceInMarket) * 100;
+    const maxPercent = (parseFloat(maxPrice) / maxPriceInMarket) * 100;
+    
+    // Update slider handles position
+    minHandleRef.current.style.left = `${minPercent}%`;
+    maxHandleRef.current.style.left = `${maxPercent}%`;
+    
+    // Update selected range
+    rangeSelectedRef.current.style.left = `${minPercent}%`;
+    rangeSelectedRef.current.style.width = `${maxPercent - minPercent}%`;
+  };
 
   const fetchActiveAuctions = async () => {
     setIsLoading(true);
     try {
-      const activeAuctionIds = await contract.methods.getActiveAuctions().call();
-      if (activeAuctionIds.length === 0) {
-        setNfts([]);
-        setIsLoading(false);
-        return;
+      const response = await axios.get('http://localhost:5001/api/nfts/active-auctions');
+      const nftsWithRemainingTime = response.data.auctions.map(nft => ({
+        ...nft,
+        remainingTime: getRemainingTime(nft.auction.endTime)
+      }));
+      
+      // Determina il prezzo massimo nel marketplace
+      if (nftsWithRemainingTime.length > 0 && web3) {
+        const prices = nftsWithRemainingTime.map(nft => 
+          parseFloat(web3.utils.fromWei(nft.auction.buyNowPrice, "ether"))
+        );
+        const highestPrice = Math.ceil(Math.max(...prices));
+        setMaxPriceInMarket(highestPrice > 0 ? highestPrice : 10);
+        setMaxPrice(String(highestPrice > 0 ? highestPrice : 10));
       }
-
-      const auctionsData = await Promise.all(
-        activeAuctionIds.map(async (tokenId) => {
-          const auction = await contract.methods.auctions(tokenId).call();
-          const tokenURI = await contract.methods.tokenURI(tokenId).call();
-          const owner = await contract.methods.ownerOf(tokenId).call();
-
-          let metadata = { image: "", name: "Unknown", description: "Unknown" };
-          try {
-            const metadataResponse = await fetch(tokenURI);
-            metadata = await metadataResponse.json();
-          } catch (error) {
-            console.error(`Error fetching metadata for token ${tokenId}:`, error);
-          }
-
-          return {
-            tokenId,
-            owner,
-            tokenURI,
-            auction: {
-              seller: auction.seller,
-              highestBidder: auction.highestBidder,
-              highestBid: auction.highestBid,
-              endTime: auction.endTime,
-              buyNowPrice: auction.buyNowPrice,
-              open: auction.open, // Corretto da 'active' a 'open'
-            },
-            metadata,
-          };
-        })
-      );
-
-      setNfts(auctionsData);
+      
+      setNfts(nftsWithRemainingTime);
+      setFilteredNfts(nftsWithRemainingTime);
     } catch (error) {
       console.error("Error fetching active auctions:", error);
     } finally {
       setIsLoading(false);
     }
   };
-  
-  const fetchMyNFTs = async () => {
-    if (!account || !contract) return;
-    
-    setIsLoading(true);
-    try {
-      const myTokenIds = await contract.methods.getOwnedNFTs(account).call();
-      
-      const myNftsData = await Promise.all(
-        myTokenIds.map(async (tokenId) => {
-          let tokenURI;
-          let metadata = { image: "", name: "Unknown", description: "Unknown" };
-          
-          try {
-            tokenURI = await contract.methods.tokenURI(tokenId).call();
-            const metadataResponse = await fetch(tokenURI);
-            metadata = await metadataResponse.json();
-          } catch (error) {
-            console.error(`Error fetching metadata for token ${tokenId}:`, error);
-          }
-          
-          return {
-            tokenId,
-            tokenURI,
-            metadata
-          };
-        })
-      );
-      
-      setMyNfts(myNftsData);
-    } catch (error) {
-      console.error("Error fetching your NFTs:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (nfts.length === 0) return;
-
-    const interval = setInterval(() => {
-      const updatedTimes = {};
-      nfts.forEach((nft) => {
-        updatedTimes[nft.tokenId] = getRemainingTime(nft.auction.endTime);
-      });
-      setRemainingTimes(updatedTimes);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [nfts]);
 
   const getRemainingTime = (endTime) => {
-    // Conversione in sicurezza per evitare errori con BigInt
     const now = Math.floor(Date.now() / 1000);
-    
-    // Converti in numeri normali invece di BigInt
     const endTimeNum = parseInt(endTime);
     const remaining = endTimeNum - now;
 
     if (remaining <= 0) return "Expired";
 
-    const hours = Math.floor(remaining / 3600);
+    const days = Math.floor(remaining / 86400);
+    const hours = Math.floor((remaining % 86400) / 3600);
     const minutes = Math.floor((remaining % 3600) / 60);
     const seconds = remaining % 60;
 
-    return `${hours}h ${minutes}m ${seconds}s`;
+    return `${days}d ${hours}h ${minutes}m ${seconds}s`;
   };
 
-  const placeBid = async (e) => {
-    if (e) e.preventDefault(); // Prevenire il comportamento predefinito del form
-    
-    if (!selectedTokenId || !bidAmount) {
-      alert("Please select a token and enter a bid amount!");
-      return;
+  // Start a timer to update remaining time every second
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const updatedNfts = nfts.map(nft => ({
+        ...nft,
+        remainingTime: getRemainingTime(nft.auction.endTime)
+      }));
+      setNfts(updatedNfts);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [nfts]);
+
+  const applyFilters = () => {
+    let filtered = [...nfts];
+
+    // Filter by player name
+    if (playerName.trim() !== "") {
+      filtered = filtered.filter(nft => 
+        nft.metadata.name.toLowerCase().includes(playerName.toLowerCase())
+      );
     }
 
-    try {
-      setIsLoading(true);
-      const auction = await contract.methods.auctions(selectedTokenId).call();
-      const currentBid = web3.utils.toWei(bidAmount, "ether");
-      const currentHighestBid = auction.highestBid;
+    // Filter by rarity
+    if (rarity !== "") {
+      filtered = filtered.filter(nft => 
+        nft.metadata.attributes.some(attr => 
+          attr.trait_type === "Rarity" && attr.value === rarity
+        )
+      );
+    }
 
-      if (parseInt(currentBid) <= parseInt(currentHighestBid)) {
-        alert(`Your bid must be higher than the current bid (${web3.utils.fromWei(currentHighestBid, "ether")} ETH).`);
-        setIsLoading(false);
-        return;
-      }
-
-      const buyNowPrice = auction.buyNowPrice;
-      if (parseInt(currentBid) > parseInt(buyNowPrice)) {
-        alert("Bid exceeds the Buy Now price. Proceeding with Buy Now instead.");
-        await buyNow(selectedTokenId);
-        return;
-      }
-
-      await contract.methods.bid(selectedTokenId).send({
-        from: account,
-        value: currentBid,
+    // Filter by price range
+    if (web3 && minPrice !== "" && maxPrice !== "" && !isNaN(minPrice) && !isNaN(maxPrice)) {
+      filtered = filtered.filter(nft => {
+        const nftPrice = parseFloat(web3.utils.fromWei(nft.auction.buyNowPrice, "ether"));
+        return nftPrice >= parseFloat(minPrice) && nftPrice <= parseFloat(maxPrice);
       });
-
-      alert(`Bid of ${bidAmount} ETH placed successfully on token ID ${selectedTokenId}!`);
-      setBidAmount('');
-      
-      // Aggiorna i dati
-      await fetchActiveAuctions();
-      await fetchMyNFTs();
-    } catch (error) {
-      console.error("Error placing bid:", error);
-      alert(`Failed to place bid: ${error.message}`);
-    } finally {
-      setIsLoading(false);
     }
+
+    setFilteredNfts(filtered);
   };
 
-  const buyNow = async (tokenId) => {
+  const resetFilters = () => {
+    setPlayerName("");
+    setRarity("");
+    setMinPrice("0");
+    setMaxPrice(String(maxPriceInMarket));
+  };
+
+  const handleMinPriceChange = (e) => {
+    const value = e.target.value;
+    if (value === "" || isNaN(value)) return;
+    
+    const newMinPrice = Math.min(parseFloat(value), parseFloat(maxPrice) - 0.01);
+    setMinPrice(String(Math.max(0, newMinPrice)));
+  };
+
+  const handleMaxPriceChange = (e) => {
+    const value = e.target.value;
+    if (value === "" || isNaN(value)) return;
+    
+    const newMaxPrice = Math.max(parseFloat(value), parseFloat(minPrice) + 0.01);
+    setMaxPrice(String(Math.min(maxPriceInMarket, newMaxPrice)));
+  };
+
+  // Handle slider drag events
+  const initDrag = (type) => (e) => {
+    e.preventDefault();
+    
+    const handleMouseMove = (moveEvent) => {
+      if (!rangeTrackRef.current) return;
+      
+      const trackRect = rangeTrackRef.current.getBoundingClientRect();
+      const trackWidth = trackRect.width;
+      
+      // Calculate position as percentage
+      let percent = Math.max(0, Math.min(100, 
+        ((moveEvent.clientX - trackRect.left) / trackWidth) * 100
+      ));
+      
+      // Convert to price value
+      let price = (percent / 100) * maxPriceInMarket;
+      price = Math.round(price * 100) / 100; // Round to 2 decimal places
+      
+      if (type === 'min') {
+        if (price < parseFloat(maxPrice)) {
+          setMinPrice(String(price));
+        }
+      } else {
+        if (price > parseFloat(minPrice)) {
+          setMaxPrice(String(price));
+        }
+      }
+    };
+    
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const buyNow = async (tokenId, price) => {
     try {
       setIsLoading(true);
-      const auction = await contract.methods.auctions(tokenId).call();
-      
-      if (!auction.open) { // Verificare 'open' invece di 'active'
-        alert("This auction is no longer active.");
-        setIsLoading(false);
-        return;
-      }
-
-      const buyNowPrice = auction.buyNowPrice;
-
       await contract.methods.buyNow(tokenId).send({
         from: account,
-        value: buyNowPrice,
+        value: price,
       });
-
-      alert(`NFT bought successfully for ${web3.utils.fromWei(buyNowPrice, "ether")} ETH!`);
-      
-      // Aggiorna i dati
-      await fetchActiveAuctions();
-      await fetchMyNFTs();
+      alert("NFT purchased successfully!");
+      fetchActiveAuctions();
     } catch (error) {
-      console.error("Error buying now:", error);
+      console.error("Error buying NFT:", error);
       alert(`Failed to buy NFT: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const startAuction = async (tokenId) => {
-    try {
-      // Implementare la logica per avviare un'asta per un NFT posseduto
-      const duration = prompt("Enter auction duration in seconds:", "86400");
-      const buyNowPrice = prompt("Enter Buy Now price in ETH:", "1");
-      
-      if (!duration || !buyNowPrice) return;
-      
-      setIsLoading(true);
-      await contract.methods.startAuction(
-        tokenId, 
-        parseInt(duration), 
-        web3.utils.toWei(buyNowPrice, "ether")
-      ).send({
-        from: account
-      });
-      
-      alert(`Auction started successfully for token ID ${tokenId}!`);
-      
-      // Aggiorna i dati
-      await fetchActiveAuctions();
-      await fetchMyNFTs();
-    } catch (error) {
-      console.error("Error starting auction:", error);
-      alert(`Failed to start auction: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
   const renderMedia = (metadata) => {
-    if (metadata.image) {
-      return <img src={metadata.image} alt={metadata.name} style={{ width: "200px", height: "200px", objectFit: "cover" }} />;
-    }
-    if (metadata.video) {
+    const handleVideoClick = (e) => {
+      if (e.target.paused) {
+        e.target.play();
+      } else {
+        e.target.pause();
+      }
+    };
+  
+    if (metadata.animation_url) {
       return (
-        <video width="200" height="200" controls>
-          <source src={metadata.video} type="video/mp4" />
+        <video 
+          loop
+          playsInline
+          className="nft-image"
+          onClick={handleVideoClick}
+          style={{ cursor: "pointer" }}
+        >
+          <source src={metadata.animation_url} type="video/mp4" />
+          Your browser does not support the video tag.
         </video>
       );
     }
-    return null;
-  };
-
-  const handleTokenSelect = (tokenId) => {
-    setSelectedTokenId(tokenId);
+  
+    if (metadata.image) {
+      return <img src={metadata.image} alt={metadata.name} className="nft-image"/>;
+    }
+  
+    return <div className="nft-no-media">No media available</div>;
   };
 
   return (
-    <div>
-      <h1>NFTennis Marketplace</h1>
-      {web3 && account && <p>Connected Account: <span style={{ fontWeight: "bold" }}>{account}</span></p>}
-      
-      {/* Tab Navigation */}
-      <div style={{ marginBottom: "20px", borderBottom: "1px solid #eee" }}>
+    <div className="marketplace-container">
+      <div className="marketplace-header">
+        <h2>NFT Marketplace</h2>
         <button 
-          style={{ 
-            padding: "10px 20px", 
-            marginRight: "10px", 
-            backgroundColor: activeTab === 'auctions' ? "#0066cc" : "#f1f1f1",
-            color: activeTab === 'auctions' ? "white" : "black",
-            border: "none",
-            borderRadius: "5px 5px 0 0"
-          }}
-          onClick={() => setActiveTab('auctions')}
+          className="filter-toggle-btn"
+          onClick={() => setShowFilters(!showFilters)}
         >
-          Active Auctions
-        </button>
-        <button 
-          style={{ 
-            padding: "10px 20px", 
-            backgroundColor: activeTab === 'myNFTs' ? "#0066cc" : "#f1f1f1",
-            color: activeTab === 'myNFTs' ? "white" : "black",
-            border: "none",
-            borderRadius: "5px 5px 0 0"
-          }}
-          onClick={() => setActiveTab('myNFTs')}
-        >
-          My NFTs
+          {showFilters ? "Hide Filters" : "Show Filters"}
         </button>
       </div>
-      
-      {/* Loader */}
-      {isLoading && (
-        <div style={{ textAlign: "center", padding: "20px" }}>
-          <p>Loading...</p>
+
+      {showFilters && (
+        <div className="filters-container">
+          <div className="filter-group">
+            <label htmlFor="playerName">Player Name:</label>
+            <input
+              type="text"
+              id="playerName"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              placeholder="Search by name..."
+            />
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="rarity">Rarity:</label>
+            <select
+              id="rarity"
+              value={rarity}
+              onChange={(e) => setRarity(e.target.value)}
+            >
+              <option value="">All</option>
+              <option value="Common">Common</option>
+              <option value="Rare">Rare</option>
+              <option value="Legendary">Legendary</option>
+              <option value="Masterpiece">Masterpiece</option>
+            </select>
+          </div>
+
+          <div className="price-range-container">
+            <label>Price Range (ETH):</label>
+            
+            <div className="price-slider-container">
+              <div className="price-range-track" ref={rangeTrackRef}></div>
+              <div className="price-range-selected" ref={rangeSelectedRef}></div>
+              <div 
+                className="price-range-handle" 
+                ref={minHandleRef} 
+                onMouseDown={initDrag('min')}
+                style={{ left: '0%' }}
+              ></div>
+              <div 
+                className="price-range-handle" 
+                ref={maxHandleRef} 
+                onMouseDown={initDrag('max')}
+                style={{ left: '100%' }}
+              ></div>
+            </div>
+            
+            <div className="price-range-values">
+              <input
+                type="number"
+                className="price-range-input"
+                value={minPrice}
+                onChange={handleMinPriceChange}
+                min="0"
+                max={maxPrice}
+                step="0.01"
+              />
+              <span>to</span>
+              <input
+                type="number"
+                className="price-range-input"
+                value={maxPrice}
+                onChange={handleMaxPriceChange}
+                min={minPrice}
+                max={maxPriceInMarket}
+                step="0.01"
+              />
+            </div>
+          </div>
+
+          <button className="reset-btn" onClick={resetFilters}>
+            Reset Filters
+          </button>
         </div>
       )}
-      
-      {/* Tab Content */}
-      {activeTab === 'auctions' ? (
-        <div>
-          {/* Bid Form */}
-          {selectedTokenId && (
-            <div style={{ margin: "20px 0", padding: "15px", border: "1px solid #eee", borderRadius: "8px", backgroundColor: "#f9f9f9" }}>
-              <h3>Place a Bid</h3>
-              <form onSubmit={placeBid}>
-                <div>
-                  <label>Selected Token ID: </label>
-                  <span style={{ fontWeight: "bold" }}>{selectedTokenId}</span>
-                </div>
-                <div style={{ margin: "10px 0" }}>
-                  <label>Bid Amount (ETH): </label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    value={bidAmount} 
-                    onChange={(e) => setBidAmount(e.target.value)}
-                    placeholder="0.0" 
-                    style={{ padding: "5px", width: "150px" }}
-                  />
-                </div>
-                <button 
-                  type="submit" 
-                  disabled={!selectedTokenId || isLoading}
-                  style={{ 
-                    padding: "8px 15px", 
-                    backgroundColor: "#0066cc", 
-                    color: "white", 
-                    border: "none", 
-                    borderRadius: "4px",
-                    cursor: "pointer"
-                  }}
-                >
-                  Place Bid
-                </button>
-              </form>
-            </div>
-          )}
-          
-          <h2>Active Auctions</h2>
-          {!isLoading && nfts.length === 0 ? (
-            <p>No active auctions found.</p>
-          ) : (
-            <div className="nft-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "20px" }}>
-              {nfts.map((nft) => (
-                <div
-                  key={nft.tokenId}
-                  className={`auction-card ${selectedTokenId === nft.tokenId ? "selected" : ""}`}
-                  style={{ 
-                    border: selectedTokenId === nft.tokenId ? "2px solid #0066cc" : "1px solid #ccc", 
-                    padding: "15px", 
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    backgroundColor: "white",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-                  }}
-                  onClick={() => handleTokenSelect(nft.tokenId)}
-                >
-                  <div style={{ textAlign: "center", marginBottom: "10px" }}>
-                    {nft.metadata && renderMedia(nft.metadata)}
-                  </div>
-                  <h3 style={{ margin: "10px 0", fontSize: "18px" }}>{nft.metadata.name}</h3>
-                  <p style={{ fontSize: "14px", color: "#666", marginBottom: "15px" }}>{nft.metadata.description}</p>
-                  
-                  <div style={{ fontSize: "14px", marginBottom: "5px" }}>
-                    <strong>Token ID:</strong> {nft.tokenId}
-                  </div>
-                  <div style={{ fontSize: "14px", marginBottom: "5px" }}>
-                    <strong>Seller:</strong> {nft.auction.seller.substring(0, 6)}...{nft.auction.seller.substring(38)}
-                  </div>
-                  <div style={{ fontSize: "14px", marginBottom: "5px" }}>
-                    <strong>Current Bid:</strong> {web3 ? web3.utils.fromWei(nft.auction.highestBid, "ether") : 0} ETH
-                  </div>
-                  <div style={{ fontSize: "14px", marginBottom: "5px" }}>
-                    <strong>Buy Now Price:</strong> {web3 ? web3.utils.fromWei(nft.auction.buyNowPrice, "ether") : 0} ETH
-                  </div>
-                  <div style={{ fontSize: "14px", marginBottom: "15px", color: remainingTimes[nft.tokenId] === "Expired" ? "red" : "green" }}>
-                    <strong>Time Remaining:</strong> {remainingTimes[nft.tokenId] || "Calculating..."}
-                  </div>
-                  
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation(); // Fermare la propagazione per non selezionare il token
-                      buyNow(nft.tokenId);
-                    }}
-                    disabled={isLoading}
-                    style={{ 
-                      width: "100%", 
-                      padding: "8px", 
-                      backgroundColor: "#28a745", 
-                      color: "white", 
-                      border: "none", 
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      marginTop: "5px"
-                    }}
-                  >
-                    Buy Now
-                  </button>
-                </div>
-              ))}
-            </div>
+
+      {isLoading && <div className="loading">Loading...</div>}
+
+      {!isLoading && (
+        <div className="results-summary">
+          Found {filteredNfts.length} NFT {filteredNfts.length !== nfts.length ? `(out of ${nfts.length} total)` : ""}
+        </div>
+      )}
+
+      {!isLoading && filteredNfts.length === 0 ? (
+        <div className="no-results">
+          <p>No NFTs found with the selected filters.</p>
+          {nfts.length > 0 && (
+            <button className="reset-btn" onClick={resetFilters}>
+              Reset Filters
+            </button>
           )}
         </div>
       ) : (
-        <div>
-          <h2>My NFTs</h2>
-          {!isLoading && myNfts.length === 0 ? (
-            <p>You don't own any NFTs yet.</p>
-          ) : (
-            <div className="nft-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "20px" }}>
-              {myNfts.map((nft) => (
-                <div
-                  key={nft.tokenId}
-                  style={{ 
-                    border: "1px solid #ccc", 
-                    padding: "15px", 
-                    borderRadius: "8px",
-                    backgroundColor: "white",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-                  }}
-                >
-                  <div style={{ textAlign: "center", marginBottom: "10px" }}>
-                    {nft.metadata && renderMedia(nft.metadata)}
+        <div className="nft-grid">
+          {filteredNfts.map((nft) => (
+            <div key={nft.tokenId} className="nft-card">
+              <div className="marketplace-nft-media-container">
+                {renderMedia(nft.metadata)}
+                <div className="nft-card-overlay">
+                  <h3>{nft.metadata.name}</h3>
+                  <div className="nft-rarity">
+                    {nft.metadata.attributes.find(attr => attr.trait_type === "Rarity")?.value || "Unknown"}
                   </div>
-                  <h3 style={{ margin: "10px 0", fontSize: "18px" }}>{nft.metadata.name}</h3>
-                  <p style={{ fontSize: "14px", color: "#666", marginBottom: "15px" }}>{nft.metadata.description}</p>
-                  
-                  <div style={{ fontSize: "14px", marginBottom: "15px" }}>
-                    <strong>Token ID:</strong> {nft.tokenId}
-                  </div>
-                  
-                  <button 
-                    onClick={() => startAuction(nft.tokenId)}
-                    disabled={isLoading}
-                    style={{ 
-                      width: "100%", 
-                      padding: "8px", 
-                      backgroundColor: "#0066cc", 
-                      color: "white", 
-                      border: "none", 
-                      borderRadius: "4px",
-                      cursor: "pointer"
-                    }}
-                  >
-                    Start Auction
-                  </button>
                 </div>
-              ))}
+              </div>
+              <div className="nft-auction-time">
+                <span>Time Left: {nft.remainingTime}</span>
+              </div>
+              <div className="nft-card-actions">
+                <button
+                  onClick={() => buyNow(nft.tokenId, nft.auction.buyNowPrice)}
+                  className="buy-btn"
+                  disabled={!account || isLoading}
+                >
+                  Buy Now <br/>({web3 ? web3.utils.fromWei(nft.auction.buyNowPrice, "ether") : 0} ETH)
+                </button>
+                <Link
+                  to={`/nft/${nft.tokenId}`}
+                  className="info-btn"
+                >
+                  Place Bid
+                </Link>
+              </div>
             </div>
-          )}
+          ))}
         </div>
       )}
-      
-      {/* Update Button */}
-      <div style={{ marginTop: "30px", textAlign: "center" }}>
-        <button 
-          onClick={activeTab === 'auctions' ? fetchActiveAuctions : fetchMyNFTs}
-          disabled={isLoading}
-          style={{ 
-            padding: "10px 20px", 
-            backgroundColor: "#6c757d", 
-            color: "white", 
-            border: "none", 
-            borderRadius: "4px",
-            cursor: "pointer"
-          }}
-        >
-          Refresh Data
-        </button>
-      </div>
     </div>
   );
 };
