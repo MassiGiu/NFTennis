@@ -1,15 +1,20 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const FormData = require('form-data');
 const multer = require('multer');
+const FormData = require('form-data');
+const fs = require('fs').promises;
+const path = require('path');
+const os = require('os');
 const { nftennisContract, web3, ownerAddress } = require('./app/utils/web3');
 
 // Configurazione
 const app = express();
-const port = process.env.PORT || 5001;
+const port = process.env.PORT || 5002;
 const AUCTION_CHECK_INTERVAL = 20000; // 20 secondi
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const IPFS_API_URL = 'http://127.0.0.1:5001/api/v0';
+const IPFS_GATEWAY = 'http://127.0.0.1:8080/ipfs';
 
 // Costanti
 const FILE_TYPES = {
@@ -56,39 +61,92 @@ app.use(cors({
 const nftRoutes = require('./app/routes/nft_routes')(nftennisContract, web3, ownerAddress);
 app.use('/api/nfts', nftRoutes);
 
-// Helper Functions
-async function uploadToPinata(file, filename) {
-  const form = new FormData();
-  form.append('file', file, { filename });
-
-  const response = await axios.post(
-    "https://api.pinata.cloud/pinning/pinFileToIPFS",
-    form,
-    {
-      headers: {
-        ...form.getHeaders(),
-        pinata_api_key: process.env.PINATA_API_KEY,
-        pinata_secret_api_key: process.env.PINATA_API_SECRET
+// Helper Functions per IPFS
+async function uploadToIPFS(fileBuffer, filename) {
+  try {
+    // Creiamo un file temporaneo
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ipfs-'));
+    const tempFilePath = path.join(tempDir, filename);
+    
+    // Scriviamo il buffer nel file temporaneo
+    await fs.writeFile(tempFilePath, fileBuffer);
+    
+    // Creiamo un FormData per l'upload
+    const formData = new FormData();
+    const fileStream = await fs.readFile(tempFilePath);
+    formData.append('file', fileStream, { filename });
+    
+    // Upload al nodo IPFS locale
+    const response = await axios.post(
+      `${IPFS_API_URL}/add`,
+      formData,
+      {
+        headers: {
+          ...formData.getHeaders(),
+          'Content-Type': 'multipart/form-data'
+        }
       }
-    }
-  );
+    );
+    
+    // Pulizia file temporaneo
+    await fs.unlink(tempFilePath);
+    await fs.rmdir(tempDir);
+    
+    // Otteniamo il CID e creiamo l'URL
+    const cid = response.data.Hash;
+    await axios.post(`${IPFS_API_URL}/pin/add?arg=${cid}`);
+    console.log(`File con CID ${cid} pinnato con successo`);
 
-  return `https://indigo-academic-trout-818.mypinata.cloud/ipfs/${response.data.IpfsHash}`;
+    return `${IPFS_GATEWAY}/${cid}`;
+  } catch (error) {
+    console.error("Errore durante l'upload su IPFS:", error);
+    throw error;
+  }
 }
 
-async function uploadMetadataToPinata(metadata) {
-  const response = await axios.post(
-    "https://api.pinata.cloud/pinning/pinJSONToIPFS",
-    metadata,
-    {
-      headers: {
-        pinata_api_key: process.env.PINATA_API_KEY,
-        pinata_secret_api_key: process.env.PINATA_API_SECRET
+async function uploadMetadataToIPFS(metadata) {
+  try {
+    // Convertiamo l'oggetto JSON in stringa
+    const metadataString = JSON.stringify(metadata);
+    
+    // Creiamo un file temporaneo per i metadati
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ipfs-'));
+    const tempFilePath = path.join(tempDir, 'metadata.json');
+    
+    // Scriviamo i metadati nel file temporaneo
+    await fs.writeFile(tempFilePath, metadataString);
+    
+    // Creiamo un FormData per l'upload
+    const formData = new FormData();
+    const fileStream = await fs.readFile(tempFilePath);
+    formData.append('file', fileStream, { filename: 'metadata.json' });
+    
+    // Upload al nodo IPFS locale
+    const response = await axios.post(
+      `${IPFS_API_URL}/add`,
+      formData,
+      {
+        headers: {
+          ...formData.getHeaders(),
+          'Content-Type': 'multipart/form-data'
+        }
       }
-    }
-  );
-
-  return `https://indigo-academic-trout-818.mypinata.cloud/ipfs/${response.data.IpfsHash}`;
+    );
+    
+    // Pulizia file temporaneo
+    await fs.unlink(tempFilePath);
+    await fs.rmdir(tempDir);
+    
+    // Otteniamo il CID e creiamo l'URL
+    const cid = response.data.Hash;
+    await axios.post(`${IPFS_API_URL}/pin/add?arg=${cid}`);
+    console.log(`Metadata con CID ${cid} pinnato con successo`);
+    
+    return `${IPFS_GATEWAY}/${cid}`;
+  } catch (error) {
+    console.error("Errore durante l'upload dei metadati su IPFS:", error);
+    throw error;
+  }
 }
 
 // Aggiornato per includere rarity e mediaType
@@ -179,9 +237,9 @@ async function mintNFTController(req, res) {
       });
     }
 
-    // Caricamento del file
-    const fileURI = await uploadToPinata(req.file.buffer, req.file.originalname);
-    console.log("File caricato su Pinata:", fileURI);
+    // Caricamento del file su IPFS locale
+    const fileURI = await uploadToIPFS(req.file.buffer, req.file.originalname);
+    console.log("File caricato su IPFS:", fileURI);
 
     // Creazione dei metadati
     const metadata = {
@@ -200,9 +258,9 @@ async function mintNFTController(req, res) {
       metadata.animation_url = fileURI; // Campo standard per video/animazioni in metadati NFT
     }
 
-    // Carica i metadati
-    const tokenURI = await uploadMetadataToPinata(metadata);
-    console.log("Metadati caricati su Pinata:", tokenURI);
+    // Carica i metadati su IPFS locale
+    const tokenURI = await uploadMetadataToIPFS(metadata);
+    console.log("Metadati caricati su IPFS:", tokenURI);
 
     // Conia l'NFT
     const mintResponse = await mintNFT(recipient, tokenURI, rarityNumber, mediaType);
@@ -243,4 +301,6 @@ setInterval(() => {
 // Avvio del server
 app.listen(port, () => {
   console.log(`Server in esecuzione su http://localhost:${port}`);
+  console.log(`IPFS API collegato a ${IPFS_API_URL}`);
+  console.log(`IPFS Gateway collegato a ${IPFS_GATEWAY}`);
 });

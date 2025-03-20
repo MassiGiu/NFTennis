@@ -223,6 +223,15 @@ contract NFTennis is ERC721URIStorage, Ownable, ReentrancyGuard {
         return ownedTokens[owner];
     }
 
+    function getNFTsInAuctionByOwner(address owner) external view returns (uint256 count) {
+        uint256[] memory owned = ownedTokens[owner];
+        for (uint256 i = 0; i < owned.length; i++) {
+            if (auctions[owned[i]].open) {
+                count++;
+            }
+        }
+    }
+
     function getActiveAuctions() external view returns (uint256[] memory) {
         return activeAuctions;
     }

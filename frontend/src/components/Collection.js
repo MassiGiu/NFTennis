@@ -13,6 +13,7 @@ const Collection = () => {
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [activeAuctions, setActiveAuctions] = useState([]);
+  const [nftInAuctionCount, setNftInAuctionCount] = useState(0);
   
   const [nftStates, setNftStates] = useState({});
   
@@ -40,8 +41,11 @@ const Collection = () => {
   }, []);
 
   useEffect(() => {
-    fetchNFTs();
-    fetchAndCacheAuctionStatus();
+    if (web3 && contract && account) {
+      fetchNFTs();
+      fetchAndCacheAuctionStatus();
+      fetchUserNFTsInAuction();
+    }
   }, [account, web3, contract]);
 
   useEffect(() => {
@@ -65,20 +69,31 @@ const Collection = () => {
       
       setNftStates(initialNftStates);
     }
-  }, [nfts, activeAuctions]);
+  }, [nfts, activeAuctions, nftInAuctionCount]);
+
+  const fetchUserNFTsInAuction = async () => {
+    if (!contract || !account) return;
+    
+    try {
+      const count = await contract.methods.getNFTsInAuctionByOwner(account).call();
+      setNftInAuctionCount(Number(count));
+    } catch (error) {
+      console.error("Error fetching NFTs in auction count:", error);
+    }
+  };
 
   const fetchActiveAuctions = async () => {
     try {
-      const response = await axios.get('http://localhost:5001/api/nfts/active-auctions');
+      const response = await axios.get('http://localhost:5002/api/nfts/active-auctions');
       setActiveAuctions(response.data.auctions);
+      return response.data.auctions;
     } catch (error) {
       console.error("Error fetching active auctions:", error);
+      return [];
     }
   };
 
   const calculateStats = () => {
-    const inAuctionCount = activeAuctions.length;
-    
     const rarityCount = {
       'Common': 0,
       'Rare': 0,
@@ -104,20 +119,21 @@ const Collection = () => {
     
     setStats({
       total: nfts.length,
-      inAuction: inAuctionCount,
+      inAuction: nftInAuctionCount,
       rarityDistribution: updatedRarityDistribution
     });
   };
 
-
   const fetchAndCacheAuctionStatus = async () => {
+    if (!web3) return [];
+    
     try {
       // Recupera l'account corrente dell'utente
       const currentAccount = await window.ethereum.request({ method: 'eth_accounts' });
       const userAddress = currentAccount[0];
       
       // Recupera le aste attive dall'API o dalla blockchain
-      const response = await axios.get('http://localhost:5001/api/nfts/active-auctions');
+      const response = await axios.get('http://localhost:5002/api/nfts/active-auctions');
       const auctions = response.data.auctions;
       
       // Aggiungi un flag per indicare se l'NFT appartiene all'utente corrente
@@ -125,7 +141,7 @@ const Collection = () => {
         return {
           ...auction,
           isOwnedByUser: auction.ownerAddress && 
-                         auction.ownerAddress.toLowerCase() === userAddress.toLowerCase()
+                        auction.ownerAddress.toLowerCase() === userAddress.toLowerCase()
         };
       });
       
@@ -140,42 +156,12 @@ const Collection = () => {
       console.error("Error fetching active auctions:", error);
       // In caso di errore, prova a recuperare dalla cache
       const cachedAuctions = JSON.parse(localStorage.getItem('activeAuctions') || '[]');
+      setActiveAuctions(cachedAuctions);
       return cachedAuctions;
     }
   };
 
-  const fetchNFTs = async () => {
-    if (!account || !web3 || !contract) return;
-    try {
-      setLoading(true);
-      setFeedback("");
-      const ownedNFTs = await contract.methods.getOwnedNFTs(account).call();
-      if (ownedNFTs.length === 0) {
-        setFeedback("No NFTs found in your collection.");
-        setNfts([]);
-        setLoading(false);
-        return;
-      }
-      const nftDetails = await Promise.all(ownedNFTs.map(async (tokenId) => {
-        const tokenURI = await contract.methods.tokenURI(tokenId).call();
-        const response = await fetch(tokenURI);
-        const metadata = await response.json();
-        const isInAuction = await isNFTInAuction(tokenId);
-        return {
-          tokenId,
-          metadata,
-          isInAuction
-        };
-      }));
-      setNfts(nftDetails);
-    } catch (error) {
-      console.error("Error fetching NFTs:", error);
-      setFeedback("Error fetching NFTs");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Nuova funzione per verificare se un NFT è in asta utilizzando la cache
   const isNFTInAuction = async (tokenId) => {
     // Prima prova a controllare la cache
     const cachedAuctions = JSON.parse(localStorage.getItem('activeAuctions') || '[]');
@@ -194,6 +180,46 @@ const Collection = () => {
     } catch (error) {
       console.error(`Error checking auction status for token ${tokenId}:`, error);
       return false;
+    }
+  };
+
+  const fetchNFTs = async () => {
+    if (!account || !web3 || !contract) return;
+    try {
+      setLoading(true);
+      setFeedback("");
+      
+      // Ottieni gli NFT posseduti dall'utente
+      const ownedNFTs = await contract.methods.getOwnedNFTs(account).call();
+      
+      if (ownedNFTs.length === 0) {
+        setNfts([]);
+        setLoading(false);
+        return;
+      }
+      
+      // Recupera i dettagli di ogni NFT
+      const nftDetails = await Promise.all(ownedNFTs.map(async (tokenId) => {
+        const tokenURI = await contract.methods.tokenURI(tokenId).call();
+        const response = await fetch(tokenURI);
+        const metadata = await response.json();
+        
+        // Verifica se l'NFT è in asta usando la nuova funzione
+        const isInAuction = await isNFTInAuction(tokenId);
+        
+        return {
+          tokenId,
+          metadata,
+          isInAuction
+        };
+      }));
+      
+      setNfts(nftDetails);
+    } catch (error) {
+      console.error("Error fetching NFTs:", error);
+      setFeedback("Error fetching NFTs");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -231,71 +257,75 @@ const Collection = () => {
     }));
   };
 
- const startAuction = async (tokenId) => {
-  const { auctionDuration, buyNowPrice } = nftStates[tokenId];
-  
-  try {
-    if (!contract) throw new Error("Contract not initialized");
+  const startAuction = async (tokenId) => {
+    const { auctionDuration, buyNowPrice } = nftStates[tokenId];
     
-    const durationInSeconds = 
-      auctionDuration.days * 86400 + 
-      auctionDuration.hours * 3600 + 
-      auctionDuration.minutes * 60 + 
-      auctionDuration.seconds;
-    
-    if (durationInSeconds <= 0) {
-      alert("La durata dell'asta deve essere maggiore di zero.");
-      return;
-    }
-    
-    if (!buyNowPrice || isNaN(buyNowPrice) || buyNowPrice <= 0) {
-      alert("Inserisci un prezzo di acquisto valido.");
-      return;
-    }
-    
-    const buyNowPriceInWei = web3.utils.toWei(buyNowPrice, "ether");
-    setFeedback("Verifico lo stato di approvazione...");
-    
-    const approvedAddress = await contract.methods.getApproved(tokenId).call();
-    if (approvedAddress.toLowerCase() !== process.env.REACT_APP_CONTRACT_ADDRESS.toLowerCase()) {
-      setFeedback("Approvo il contratto per gestire il tuo NFT...");
-      await contract.methods.approve(process.env.REACT_APP_CONTRACT_ADDRESS, tokenId).send({ from: account });
-      setFeedback("Approvazione completata! Ora avvio l'asta...");
-    }
-    
-    setFeedback("Avvio dell'asta... Attendi e conferma la transazione in MetaMask.");
-    await contract.methods.startAuction(tokenId, durationInSeconds, buyNowPriceInWei).send({
-      from: account,
-      gas: 300000
-    });
-    
-    // Update local state to immediately reflect the NFT is in auction
-    const updatedNfts = nfts.map(nft => 
-      nft.tokenId === tokenId ? { ...nft, isInAuction: true } : nft
-    );
-    
-    setNfts(updatedNfts);
-    
-    // Resetta lo stato dell'NFT specifico
-    setNftStates(prev => ({
-      ...prev,
-      [tokenId]: {
-        ...prev[tokenId],
-        sellMode: false,
-        auctionDuration: { days: 0, hours: 1, minutes: 0, seconds: 0 },
-        buyNowPrice: ''
+    try {
+      if (!contract) throw new Error("Contract not initialized");
+      
+      const durationInSeconds = 
+        auctionDuration.days * 86400 + 
+        auctionDuration.hours * 3600 + 
+        auctionDuration.minutes * 60 + 
+        auctionDuration.seconds;
+      
+      if (durationInSeconds <= 0) {
+        alert("La durata dell'asta deve essere maggiore di zero.");
+        return;
       }
-    }));
-    
-    setFeedback("Asta avviata con successo!");
-    
-    // Aggiorna i dati
-    fetchActiveAuctions();
-  } catch (error) {
-    console.error("Error starting auction:", error);
-    setFeedback(`Impossibile avviare l'asta: ${error.message}`);
-  }
-};
+      
+      if (!buyNowPrice || isNaN(buyNowPrice) || buyNowPrice <= 0) {
+        alert("Inserisci un prezzo di acquisto valido.");
+        return;
+      }
+      
+      const buyNowPriceInWei = web3.utils.toWei(buyNowPrice, "ether");
+      setFeedback("Verifico lo stato di approvazione...");
+      
+      const approvedAddress = await contract.methods.getApproved(tokenId).call();
+      if (approvedAddress.toLowerCase() !== process.env.REACT_APP_CONTRACT_ADDRESS.toLowerCase()) {
+        setFeedback("Approvo il contratto per gestire il tuo NFT...");
+        await contract.methods.approve(process.env.REACT_APP_CONTRACT_ADDRESS, tokenId).send({ from: account });
+        setFeedback("Approvazione completata! Ora avvio l'asta...");
+      }
+      
+      setFeedback("Avvio dell'asta... Attendi e conferma la transazione in MetaMask.");
+      await contract.methods.startAuction(tokenId, durationInSeconds, buyNowPriceInWei).send({
+        from: account,
+        gas: 300000
+      });
+      
+      // Update local state to immediately reflect the NFT is in auction
+      const updatedNfts = nfts.map(nft => 
+        nft.tokenId === tokenId ? { ...nft, isInAuction: true } : nft
+      );
+      
+      setNfts(updatedNfts);
+      
+      // Resetta lo stato dell'NFT specifico
+      setNftStates(prev => ({
+        ...prev,
+        [tokenId]: {
+          ...prev[tokenId],
+          sellMode: false,
+          auctionDuration: { days: 0, hours: 1, minutes: 0, seconds: 0 },
+          buyNowPrice: ''
+        }
+      }));
+      
+      setFeedback("Asta avviata con successo!");
+      
+      // Aggiorna i dati
+      const auctions = await fetchActiveAuctions();
+      fetchUserNFTsInAuction();
+      
+      // Aggiorna la cache delle aste attive
+      localStorage.setItem('activeAuctions', JSON.stringify(auctions));
+    } catch (error) {
+      console.error("Error starting auction:", error);
+      setFeedback(`Impossibile avviare l'asta: ${error.message}`);
+    }
+  };
 
   const getRarityName = (attributes) => {
     if (attributes && attributes.length > 0) {

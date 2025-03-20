@@ -16,9 +16,9 @@ const Marketplace = () => {
   const [playerName, setPlayerName] = useState("");
   const [rarity, setRarity] = useState("");
   const [minPrice, setMinPrice] = useState("0");
-  const [maxPrice, setMaxPrice] = useState("10");
+  const [maxPrice, setMaxPrice] = useState("20");
   const [showFilters, setShowFilters] = useState(false);
-  const [maxPriceInMarket, setMaxPriceInMarket] = useState(10);
+  const [maxPriceInMarket, setMaxPriceInMarket] = useState(20);
   
   // Refs for range slider
   const rangeTrackRef = useRef(null);
@@ -72,7 +72,7 @@ const Marketplace = () => {
   const fetchActiveAuctions = async () => {
     setIsLoading(true);
     try {
-      const response = await axios.get('http://localhost:5001/api/nfts/active-auctions');
+      const response = await axios.get('http://localhost:5002/api/nfts/active-auctions');
       const nftsWithRemainingTime = response.data.auctions.map(nft => ({
         ...nft,
         remainingTime: getRemainingTime(nft.auction.endTime)
@@ -84,8 +84,8 @@ const Marketplace = () => {
           parseFloat(web3.utils.fromWei(nft.auction.buyNowPrice, "ether"))
         );
         const highestPrice = Math.ceil(Math.max(...prices));
-        setMaxPriceInMarket(highestPrice > 0 ? highestPrice : 10);
-        setMaxPrice(String(highestPrice > 0 ? highestPrice : 10));
+        setMaxPriceInMarket(highestPrice > 0 ? highestPrice : 20);
+        setMaxPrice(String(highestPrice > 0 ? highestPrice : 20));
       }
       
       setNfts(nftsWithRemainingTime);

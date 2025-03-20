@@ -11,28 +11,28 @@ const Home = () => {
       type: "common",
       media: {
         type: "image",
-        src: `${process.env.PUBLIC_URL}/JANNIKSINNER.png`
+        src: `${process.env.PUBLIC_URL}/common.png`
       },
       title: "Common NFT",
-      description: "Our common works, unique but accessible to everyone. These pieces represent the foundation of our collection, offering high-quality digital art at an entry level.",
+      description: "The tennis player in his most authentic form, representing the beginning of his career. A tribute to the origins, where every champion takes his first steps towards glory. Perfect to start your collection.",
     },
     {
       type: "rare",
       media: {
         type: "image",
-        src: `${process.env.PUBLIC_URL}/logo192.png`
+        src: `${process.env.PUBLIC_URL}/rare.png`
       },
       title: "Rare NFT",
-      description: "Limited editions with special characteristics that make them stand out. Each rare NFT brings unique advantages and prestige to its owner.",
+      description: "The thrill of holding a trophy in your hands. These NFTs capture the determination and growth of a tennis player, telling the story of the road to glory. A unique piece for those who know how to recognize the value of the journey.",
     },
     {
       type: "legendary",
       media: {
         type: "image",
-        src: `${process.env.PUBLIC_URL}/logo192.png`
+        src: `${process.env.PUBLIC_URL}/legendary.png`
       },
       title: "Legendary NFT",
-      description: "Our most exclusive and sought-after pieces with extraordinary features. These legendary works are the cornerstone of any serious collector's portfolio.",
+      description: "A celebration of greatness: a tennis player immortalized in the moment of winning a Slam. These NFTs tell the story of legends, of those who have left an indelible mark on the world of tennis. A rarity that embodies glory.",
     },
     {
       type: "masterpiece",
@@ -41,7 +41,7 @@ const Home = () => {
         src: `${process.env.PUBLIC_URL}/AO.mp4`
       },
       title: "Masterpiece NFT",
-      description: "Unique world-class masterpieces with extraordinary artistic value. These one-of-a-kind creations represent the pinnacle of digital art innovation.",
+      description: "The pinnacle of the collection: an exclusive video that captures an iconic moment in a tennis player’s career. An unforgettable shot, a historic victory, an everlasting emotion. Not just an NFT, but a fragment of tennis history.",
     }
   ];
 
@@ -119,6 +119,9 @@ const Home = () => {
 
       {/* Carousel NFT Section */}
       <div className="nft-explanation-section">
+        <div className="nft-floating-particle"></div>
+        <div className="nft-floating-particle"></div>
+        <div className="nft-floating-particle"></div>
         <div className="nft-section-container">
           <h2 className="nft-section-title">Discover our collection</h2>
           <p className="nft-section-description">Explore unique NFTs of different rarities in our exclusive collection</p>

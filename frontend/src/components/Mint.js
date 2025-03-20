@@ -14,6 +14,7 @@ const Mint = () => {
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState("");
+  
 
   useEffect(() => {
     const setupWeb3 = async () => {
@@ -90,7 +91,7 @@ const Mint = () => {
     try {
       setLoading(true);
       setFeedback("");
-      const response = await axios.post("http://localhost:5001/api/mint", formData, {
+      const response = await axios.post(`http://localhost:5002/api/mint`, formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
       setFeedback("NFT minted successfully!");
