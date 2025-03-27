@@ -48,7 +48,7 @@ Follow these steps to set up the project locally.
    Navigate to the project directory and compile the contracts, then deploy the contracts to the local blockchain:
    ```bash
    truffle compile
-   truffle migrate --network development
+   truffle migrate 
 
 5. **Set up and run the backend**:
    ```bash
