@@ -1,4 +1,3 @@
-/* Home Page Specific Styles */
 .nft-home {
   width: 100%;
   margin: 0;
@@ -9,7 +8,7 @@
 
 .nft-home .nft-hero {
   position: relative;
-  height: calc(100vh - 70px); /* Subtract header height */
+  height: calc(100vh - 70px);
   width: 100%;
   overflow: hidden;
   display: flex;
@@ -29,7 +28,7 @@
 .nft-home .nft-background-video {
   width: 100%;
   height: 100%;
-  object-fit: cover; /* Maintain proportions and cover entire area */
+  object-fit: cover; 
 }
 
 .nft-home .nft-overlay {
@@ -79,7 +78,6 @@
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
-/* Sfondo migliorato per la sezione NFT carousel */
 .nft-home .nft-explanation-section {
   background-color: #283046;
   padding: 80px 0;
@@ -87,7 +85,6 @@
   overflow: hidden;
 }
 
-/* Aggiungi elementi grafici di sfondo */
 .nft-home .nft-explanation-section::before {
   content: '';
   position: absolute;
@@ -102,7 +99,6 @@
   z-index: 0;
 }
 
-/* Aggiungi pattern a griglia */
 .nft-home .nft-explanation-section::after {
   content: '';
   position: absolute;
@@ -117,7 +113,6 @@
   z-index: 0;
 }
 
-/* Aggiungi particelle luminose */
 .nft-home .nft-section-container {
   max-width: 1200px;
   margin: 0 auto;
@@ -127,7 +122,6 @@
   z-index: 1;
 }
 
-/* Aggiungi questi elementi luminosi fluttuanti */
 .nft-home .nft-explanation-section .nft-floating-particle {
   position: absolute;
   background: radial-gradient(circle, rgba(22, 180, 77, 0.6) 0%, rgba(22, 180, 77, 0) 70%);
@@ -192,12 +186,11 @@
   margin-right: auto;
 }
 
-/* New Carousel Styles */
 .nft-home .nft-carousel-container {
   position: relative;
   margin: 0 auto;
   max-width: 1000px;
-  padding: 0 60px; /* Space for arrows */
+  padding: 0 60px; 
 }
 
 .nft-home .nft-carousel {
@@ -221,7 +214,6 @@
   padding: 20px 0;
 }
 
-/* Profile Image in Carousel */
 .nft-home .nft-profile-image {
   width: 400px;
   height: 550px;
@@ -237,21 +229,17 @@
 
 .nft-home .nft-profile-image img {
   width: 100%;
-  object-fit: contain; /* Per mantenere le proporzioni senza ritagliare */
+  object-fit: contain; 
   transition: transform 0.4s ease;
-  border-radius: 20px; /* Arrotondamento per l'immagine stessa */
+  border-radius: 20px; 
 }
 
-
-
-/* Profile Content in Carousel */
 .nft-home .nft-profile-content {
   width: 50%;
   text-align: left;
   padding: 20px 0;
 }
 
-/* Colori per i titoli delle varie rarità */
 .common h3 {
   background: linear-gradient(90deg, #4caf50, #32a537);
   font-size: 2rem;
@@ -361,7 +349,7 @@
 }
 
 
-/* Steps Section - Keep Original Styles */
+/* Steps Section*/
 .nft-home .nft-steps-section {
   padding: 80px 0;
   background-color: #1e2433;
@@ -566,31 +554,25 @@
   }
 }
 
-
-/* Aggiungi questi stili alla tua Home.css */
-
 .nft-home .nft-profile-video {
   
-  object-fit: contain; /* Per mantenere le proporzioni senza ritagliare */
+  object-fit: contain;
   transition: transform 0.4s ease;
   border-radius: 20px;
   display: block;
   max-width: 100%;
 }
 
-/* Media queries esistenti */
 @media (max-width: 992px) {
-  /* ... gli stili esistenti ... */
   
   .nft-home .nft-profile-image {
     width: 100%;
-    max-width: 350px; /* Limita la larghezza su schermi più piccoli */
+    max-width: 350px; 
     margin: 0 auto;
   }
 }
 
 @media (max-width: 768px) {
-  /* ... gli stili esistenti ... */
   
   .nft-home .nft-profile-image {
     height: 300px;
@@ -598,7 +580,6 @@
 }
 
 @media (max-width: 480px) {
-  /* ... gli stili esistenti ... */
   
   .nft-home .nft-profile-image {
     height: 250px;

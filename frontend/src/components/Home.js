@@ -11,7 +11,7 @@ const Home = () => {
       type: "common",
       media: {
         type: "image",
-        src: `${process.env.PUBLIC_URL}/common.png`
+        src: `${process.env.PUBLIC_URL}/image/common.png`
       },
       title: "Common NFT",
       description: "The tennis player in his most authentic form, representing the beginning of his career. A tribute to the origins, where every champion takes his first steps towards glory. Perfect to start your collection.",
@@ -20,7 +20,7 @@ const Home = () => {
       type: "rare",
       media: {
         type: "image",
-        src: `${process.env.PUBLIC_URL}/rare.png`
+        src: `${process.env.PUBLIC_URL}/image/rare.png`
       },
       title: "Rare NFT",
       description: "The thrill of holding a trophy in your hands. These NFTs capture the determination and growth of a tennis player, telling the story of the road to glory. A unique piece for those who know how to recognize the value of the journey.",
@@ -29,7 +29,7 @@ const Home = () => {
       type: "legendary",
       media: {
         type: "image",
-        src: `${process.env.PUBLIC_URL}/legendary.png`
+        src: `${process.env.PUBLIC_URL}/image/legendary.png`
       },
       title: "Legendary NFT",
       description: "A celebration of greatness: a tennis player immortalized in the moment of winning a Slam. These NFTs tell the story of legends, of those who have left an indelible mark on the world of tennis. A rarity that embodies glory.",
@@ -38,7 +38,7 @@ const Home = () => {
       type: "masterpiece",
       media: {
         type: "video",
-        src: `${process.env.PUBLIC_URL}/AO.mp4`
+        src: `${process.env.PUBLIC_URL}/image/masterpiece.mp4`
       },
       title: "Masterpiece NFT",
       description: "The pinnacle of the collection: an exclusive video that captures an iconic moment in a tennis player’s career. An unforgettable shot, a historic victory, an everlasting emotion. Not just an NFT, but a fragment of tennis history.",
@@ -101,7 +101,7 @@ const Home = () => {
             muted
             playsInline
           >
-            <source src={`${process.env.PUBLIC_URL}/Intro-Home.mp4`} type="video/mp4" />
+            <source src={`${process.env.PUBLIC_URL}/image/Intro-Home.mp4`} type="video/mp4" />
             Your browser does not support HTML5 video.
           </video>
           <div className="nft-overlay"></div>

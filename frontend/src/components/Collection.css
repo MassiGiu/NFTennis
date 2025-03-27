@@ -1,4 +1,3 @@
-/* Collection.css - Dark Mode Version with Scoped Styles */
 .nft-collection-page {
   padding: 20px;
   text-align: center;
@@ -592,7 +591,6 @@
   }
 }
 
-/* Assicurarsi che il contenitore dell'immagine abbia position: relative */
 .nft-collection-page .nft-image-container {
   width: 100%;
   height: 400px;

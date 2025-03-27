@@ -136,7 +136,7 @@ const Collection = () => {
       const response = await axios.get('http://localhost:5002/api/nfts/active-auctions');
       const auctions = response.data.auctions;
       
-      // Aggiungi un flag per indicare se l'NFT appartiene all'utente corrente
+      // Aggiunge un flag per indicare se l'NFT appartiene all'utente corrente
       const auctionsWithOwnership = auctions.map(auction => {
         return {
           ...auction,
@@ -161,7 +161,7 @@ const Collection = () => {
     }
   };
 
-  // Nuova funzione per verificare se un NFT è in asta utilizzando la cache
+  // Funzione per verificare se un NFT è in asta utilizzando la cache
   const isNFTInAuction = async (tokenId) => {
     // Prima prova a controllare la cache
     const cachedAuctions = JSON.parse(localStorage.getItem('activeAuctions') || '[]');
@@ -189,7 +189,7 @@ const Collection = () => {
       setLoading(true);
       setFeedback("");
       
-      // Ottieni gli NFT posseduti dall'utente
+      // Ottiene gli NFT posseduti dall'utente
       const ownedNFTs = await contract.methods.getOwnedNFTs(account).call();
       
       if (ownedNFTs.length === 0) {
@@ -295,7 +295,7 @@ const Collection = () => {
         gas: 300000
       });
       
-      // Update local state to immediately reflect the NFT is in auction
+      // Aggiorna lo stato per vedere se un NFT è in asta
       const updatedNfts = nfts.map(nft => 
         nft.tokenId === tokenId ? { ...nft, isInAuction: true } : nft
       );

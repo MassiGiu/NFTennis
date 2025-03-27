@@ -32,7 +32,7 @@ const RARITY_LEVELS = {
   COMMON: 0,
   RARE: 1,
   LEGENDARY: 2,
-  MASTERPIECE: 3  // Aggiunto MASTERPIECE
+  MASTERPIECE: 3 
 };
 
 // Configurazione Multer
@@ -149,7 +149,7 @@ async function uploadMetadataToIPFS(metadata) {
   }
 }
 
-// Aggiornato per includere rarity e mediaType
+
 async function mintNFT(recipient, tokenURI, rarity, mediaType) {
   return await axios.post(
     `http://localhost:${port}/api/nfts/mint`,
@@ -183,7 +183,7 @@ async function closeExpiredAuctions() {
   }
 }
 
-// Controller aggiornato
+// Controller 
 async function mintNFTController(req, res) {
   const { recipient, name, description, rarity } = req.body;
 
@@ -251,7 +251,7 @@ async function mintNFTController(req, res) {
       ]
     };
 
-    // Aggiungi l'URI del file in base al tipo
+    // Aggiunge l'URI del file in base al tipo
     if (mediaType === MEDIA_TYPE.IMAGE) {
       metadata.image = fileURI;
     } else {

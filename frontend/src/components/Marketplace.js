@@ -11,8 +11,7 @@ const Marketplace = () => {
   const [nfts, setNfts] = useState([]);
   const [filteredNfts, setFilteredNfts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  
-  // Filter states
+
   const [playerName, setPlayerName] = useState("");
   const [rarity, setRarity] = useState("");
   const [minPrice, setMinPrice] = useState("0");
@@ -20,7 +19,6 @@ const Marketplace = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [maxPriceInMarket, setMaxPriceInMarket] = useState(20);
   
-  // Refs for range slider
   const rangeTrackRef = useRef(null);
   const minHandleRef = useRef(null);
   const maxHandleRef = useRef(null);

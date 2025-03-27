@@ -84,24 +84,6 @@ contract NFTennis is ERC721URIStorage, Ownable, ReentrancyGuard {
         emit NFTMinted(tokenId, recipient);
     }
 
-    function _updateOwnedTokens(address from, address to, uint256 tokenId) internal {
-        uint256[] storage fromTokens = ownedTokens[from];
-        for (uint256 i = 0; i < fromTokens.length; i++) {
-            if (fromTokens[i] == tokenId) {
-                fromTokens[i] = fromTokens[fromTokens.length - 1];
-                fromTokens.pop();
-                break;
-            }
-        }
-        ownedTokens[to].push(tokenId);
-    }
-
-    function _transferToken(address from, address to, uint256 tokenId) internal {
-        _updateOwnedTokens(from, to, tokenId);
-        _transfer(from, to, tokenId);
-        emit TokenTransferred(tokenId, from, to);
-    }
-
     function startAuction(uint256 tokenId, uint256 duration, uint256 buyNowPrice) external {
         if (ownerOf(tokenId) != msg.sender) revert NotOwner();
         if (auctions[tokenId].open) revert AuctionAlreadyOpen();
@@ -200,6 +182,24 @@ contract NFTennis is ERC721URIStorage, Ownable, ReentrancyGuard {
         }
 
         _removeFromActiveAuctions(tokenId);
+    }
+
+    function _updateOwnedTokens(address from, address to, uint256 tokenId) internal {
+        uint256[] storage fromTokens = ownedTokens[from];
+        for (uint256 i = 0; i < fromTokens.length; i++) {
+            if (fromTokens[i] == tokenId) {
+                fromTokens[i] = fromTokens[fromTokens.length - 1];
+                fromTokens.pop();
+                break;
+            }
+        }
+        ownedTokens[to].push(tokenId);
+    }
+
+    function _transferToken(address from, address to, uint256 tokenId) internal {
+        _updateOwnedTokens(from, to, tokenId);
+        _transfer(from, to, tokenId);
+        emit TokenTransferred(tokenId, from, to);
     }
 
     // Override delle funzioni di trasferimento

@@ -1,11 +1,11 @@
 const { Web3 } = require('web3');
 require('dotenv').config();
 
-// Importa l'ABI del contratto direttamente come JSON
-const NFTennisContract = require('../../smart-contracts/build/contracts/NFTennis.json'); // Importa l'ABI
+// Importa l'ABI del contratto 
+const NFTennisContract = require('../../smart-contracts/build/contracts/NFTennis.json'); 
 
 // Connetti a Ganache o alla rete desiderata
-const web3 = new Web3('http://127.0.0.1:7545'); // Modifica con il tuo endpoint
+const web3 = new Web3('http://127.0.0.1:7545'); 
 
 // Verifica variabili d'ambiente
 if (!process.env.CONTRACT_ADDRESS || !process.env.OWNER_ADDRESS) {

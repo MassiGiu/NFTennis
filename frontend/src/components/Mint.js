@@ -9,7 +9,7 @@ const Mint = () => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [rarity, setRarity] = useState("Common");
-  const [mediaType, setMediaType] = useState("Image"); // MediaType: "Image" o "Video"
+  const [mediaType, setMediaType] = useState("Image");
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
